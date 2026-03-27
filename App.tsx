@@ -730,57 +730,79 @@ const App: React.FC = () => {
               <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={20} /></button>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500"><Code size={24} /></div>
+            <div className="space-y-3">
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Write code for: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500 shrink-0"><Code size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-code</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Generate, debug, and explain code in any language with a dedicated canvas.</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500"><PenTool size={24} /></div>
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Write a document about: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0"><PenTool size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-word</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Write essays, stories, articles, letters & documents in a rich canvas editor. Edit inline.</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500"><Calculator size={24} /></div>
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Solve this math problem: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500 shrink-0"><Calculator size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-math</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Solve complex equations with step-by-step visual solutions.</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500"><LineChart size={24} /></div>
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Plot a graph of: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500 shrink-0"><LineChart size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-graph</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Interactive 2D & 3D math graphing like Desmos. Plot functions, equations & surfaces.</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-cyan-500/10 text-cyan-500"><FileSearch size={24} /></div>
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Analyze this in detail: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-cyan-500/10 text-cyan-500 shrink-0"><FileSearch size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-explain</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Deep analysis of documents (PDF, DOCX) and images in a professional report format.</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500"><ImageIcon size={24} /></div>
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Generate an image of: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500 shrink-0"><ImageIcon size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>Image Gen</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Create high-quality images from text prompts using advanced models.</p>
                 </div>
-              </div>
+              </button>
             </div>
-
-            <button onClick={() => setIsToolsOpen(false)} className="w-full py-3 font-bold rounded-xl text-white" style={{ backgroundColor: c.accent }}>Got it</button>
           </div>
         </div>
       )}
