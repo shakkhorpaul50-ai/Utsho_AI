@@ -193,6 +193,105 @@ const App: React.FC = () => {
     }
   };
 
+  /** Render markdown-formatted text for chat bubbles */
+  const renderMarkdown = (text: string, isUser: boolean): React.ReactNode => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    
+    const formatInline = (line: string, key: string): React.ReactNode => {
+      // Process inline formatting: bold, italic, inline code, LaTeX-style math
+      const parts: React.ReactNode[] = [];
+      // Regex for: ***bold italic***, **bold**, *italic*, `code`, \(...\) math
+      const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\\\((.+?)\\\)|\\\[(.+?)\\\])/g;
+      let lastIndex = 0;
+      let match;
+      let idx = 0;
+      while ((match = regex.exec(line)) !== null) {
+        if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
+        if (match[2]) parts.push(<strong key={`${key}-${idx}`}><em>{match[2]}</em></strong>);
+        else if (match[3]) parts.push(<strong key={`${key}-${idx}`}>{match[3]}</strong>);
+        else if (match[4]) parts.push(<em key={`${key}-${idx}`}>{match[4]}</em>);
+        else if (match[5]) parts.push(<code key={`${key}-${idx}`} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: isUser ? 'rgba(255,255,255,0.15)' : c.bgTertiary, color: isUser ? '#fff' : c.accent }}>{match[5]}</code>);
+        else if (match[6]) parts.push(<span key={`${key}-${idx}`} className="font-mono font-bold px-1" style={{ color: isUser ? '#fff' : c.accent }}>{match[6]}</span>);
+        else if (match[7]) parts.push(<div key={`${key}-${idx}`} className="font-mono font-bold py-1 text-center" style={{ color: isUser ? '#fff' : c.accent }}>{match[7]}</div>);
+        lastIndex = match.index + match[0].length;
+        idx++;
+      }
+      if (lastIndex < line.length) parts.push(line.slice(lastIndex));
+      return parts.length > 0 ? parts : line;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Empty lines -> spacing
+      if (!trimmed) {
+        elements.push(<div key={i} className="h-2" />);
+        continue;
+      }
+
+      // Headers
+      if (trimmed.startsWith('### ')) {
+        elements.push(<div key={i} className="font-bold text-base mt-3 mb-1" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(4), `h3-${i}`)}</div>);
+        continue;
+      }
+      if (trimmed.startsWith('## ')) {
+        elements.push(<div key={i} className="font-black text-base mt-4 mb-1" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(3), `h2-${i}`)}</div>);
+        continue;
+      }
+      if (trimmed.startsWith('# ')) {
+        elements.push(<div key={i} className="font-black text-lg mt-4 mb-2" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(2), `h1-${i}`)}</div>);
+        continue;
+      }
+
+      // Bullet points
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        elements.push(
+          <div key={i} className="flex gap-2 pl-2 my-0.5">
+            <span className="mt-2 w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: isUser ? 'rgba(255,255,255,0.6)' : c.accent }} />
+            <span>{formatInline(trimmed.slice(2), `li-${i}`)}</span>
+          </div>
+        );
+        continue;
+      }
+
+      // Numbered list
+      const numMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)/);
+      if (numMatch) {
+        elements.push(
+          <div key={i} className="flex gap-2 pl-2 my-0.5">
+            <span className="font-bold shrink-0" style={{ color: isUser ? 'rgba(255,255,255,0.7)' : c.accent }}>{numMatch[1]}.</span>
+            <span>{formatInline(numMatch[2], `num-${i}`)}</span>
+          </div>
+        );
+        continue;
+      }
+
+      // Separator
+      if (/^[-=_]{3,}$/.test(trimmed)) {
+        elements.push(<hr key={i} className="my-3 opacity-30" />);
+        continue;
+      }
+
+      // Blockquote
+      if (trimmed.startsWith('> ')) {
+        elements.push(
+          <div key={i} className="border-l-2 pl-3 my-1 italic opacity-80" style={{ borderColor: isUser ? 'rgba(255,255,255,0.4)' : c.accent }}>
+            {formatInline(trimmed.slice(2), `bq-${i}`)}
+          </div>
+        );
+        continue;
+      }
+
+      // Regular paragraph
+      elements.push(<div key={i} className="my-0.5">{formatInline(trimmed, `p-${i}`)}</div>);
+    }
+
+    return elements;
+  };
+
   /** Language display name mapping */
   const langDisplayName = (lang?: string): string => {
     if (!lang) return 'Code';
@@ -1589,7 +1688,7 @@ const App: React.FC = () => {
                           }
                         >
                           {m.content.startsWith("Failure") && <AlertCircle size={14} className="inline mr-2" />}
-                          {m.content}
+                          {m.role === 'model' ? renderMarkdown(m.content, false) : m.content}
                         </div>
                       )}
                       {/* S-code / S-math canvas blocks as Artifact Cards */}
