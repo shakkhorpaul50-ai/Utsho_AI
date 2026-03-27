@@ -196,7 +196,26 @@ const App: React.FC = () => {
   /** Render markdown-formatted text for chat bubbles */
   const renderMarkdown = (text: string, isUser: boolean): React.ReactNode => {
     if (!text) return null;
-    const lines = text.split('\n');
+    
+    // Pre-process: insert newlines before markdown patterns that appear inline
+    // This handles cases where the AI returns everything on one line
+    let processed = text
+      // Insert newline before ## headers that appear mid-text (not at start)
+      .replace(/([^\n])(#{1,3}\s)/g, '$1\n$2')
+      // Insert newline before numbered items like "1." or "1)" mid-text
+      .replace(/([.!?:;])\s+(\d+[\.\)]\s+[A-Z])/g, '$1\n$2')
+      // Insert newline before bullet points mid-text
+      .replace(/([.!?:;])\s+([-*]\s+[A-Z])/g, '$1\n$2')
+      // Insert newline before LaTeX display math \[...\]
+      .replace(/([^\n])(\\\[)/g, '$1\n$2')
+      // Insert newline after LaTeX display math \]
+      .replace(/(\\\])([^\n])/g, '$1\n$2')
+      // Insert newline before "Step X:" or "**Step" patterns mid-text
+      .replace(/([.!?])\s+(Step\s+\d|The final answer)/gi, '$1\n$2')
+      // Insert newline before "The final answer" pattern
+      .replace(/([.!?])\s+(The final)/gi, '$1\n\n$2');
+    
+    const lines = processed.split('\n');
     const elements: React.ReactNode[] = [];
     
     const formatInline = (line: string, key: string): React.ReactNode => {
