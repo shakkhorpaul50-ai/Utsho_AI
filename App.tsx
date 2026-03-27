@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
+import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
 import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
@@ -931,6 +931,18 @@ const App: React.FC = () => {
             
             <div className="space-y-3">
               <button 
+                onClick={() => { setIsToolsOpen(false); setInputText(''); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-gray-500/10 text-gray-400 shrink-0"><MessageCircle size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-default</h4>
+                  <p className="text-xs" style={{ color: c.textMuted }}>General chat with Utsho. Ask anything, get answers, have a conversation.</p>
+                </div>
+              </button>
+
+              <button 
                 onClick={() => { setIsToolsOpen(false); setInputText('Write code for: '); }}
                 className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
                 style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
@@ -951,6 +963,18 @@ const App: React.FC = () => {
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-word</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Write essays, stories, articles, letters & documents in a rich canvas editor. Edit inline.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => { setIsToolsOpen(false); setInputText('Write a story or poem about: '); }}
+                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
+                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
+              >
+                <div className="p-3 rounded-xl bg-pink-500/10 text-pink-500 shrink-0"><BookOpen size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-story</h4>
+                  <p className="text-xs" style={{ color: c.textMuted }}>Write creative stories, poems, fiction, and narratives with vivid detail.</p>
                 </div>
               </button>
 
