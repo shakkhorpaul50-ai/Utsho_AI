@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
 import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
 import { processAdminCommand } from './services/adminCommandService';
+import { parseGraphBlock, render2DGraph, render3DGraph, GraphConfig } from './services/mathGraphService';
 import * as db from './services/firebaseService';
 import { useTheme } from './ThemeContext';
 import { themes, themeNames, ThemeName } from './themes';
@@ -51,12 +52,24 @@ const App: React.FC = () => {
   const [dmError, setDmError] = useState('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
-  // Canvas state (S-code / S-math)
+  // Canvas state (S-code / S-math / S-word / S-graph)
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasBlocks, setCanvasBlocks] = useState<CanvasBlock[]>([]);
   const [canvasActiveIndex, setCanvasActiveIndex] = useState(0);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // S-word editing state
+  const [wordEditMode, setWordEditMode] = useState(false);
+  const [wordEditContent, setWordEditContent] = useState('');
+
+  // S-graph interactive state
+  const [graphZoom, setGraphZoom] = useState(1);
+  const [graphPan, setGraphPan] = useState({ x: 0, y: 0 });
+  const [graphRotation, setGraphRotation] = useState({ angleX: 0.6, angleY: 0.8 });
+  const [graphDragging, setGraphDragging] = useState(false);
+  const [graphDragStart, setGraphDragStart] = useState({ x: 0, y: 0 });
+  const graphCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +106,18 @@ const App: React.FC = () => {
           content,
           title: 'S-explain: Analysis',
         });
+      } else if (lang === 'word') {
+        blocks.push({
+          type: 'word',
+          content,
+          title: 'S-word: Document',
+        });
+      } else if (lang === 'graph') {
+        blocks.push({
+          type: 'graph',
+          content,
+          title: 'S-graph: Visualization',
+        });
       } else {
         const langLabel = lang || 'code';
         blocks.push({
@@ -124,6 +149,38 @@ const App: React.FC = () => {
     setCanvasActiveIndex(0);
     setCanvasOpen(true);
   };
+
+  // Graph rendering effect
+  useEffect(() => {
+    if (!canvasOpen || !canvasBlocks[canvasActiveIndex] || canvasBlocks[canvasActiveIndex].type !== 'graph') return;
+    const canvas = graphCanvasRef.current;
+    if (!canvas) return;
+
+    // Set canvas size to match container
+    const container = canvas.parentElement;
+    if (container) {
+      canvas.width = container.clientWidth * (window.devicePixelRatio || 1);
+      canvas.height = container.clientHeight * (window.devicePixelRatio || 1);
+      canvas.style.width = container.clientWidth + 'px';
+      canvas.style.height = container.clientHeight + 'px';
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    }
+
+    const graphConfig = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
+    const graphColors = {
+      bg: c.bgPrimary,
+      grid: c.textMuted,
+      axis: c.textSecondary,
+      text: c.textPrimary,
+    };
+
+    if (graphConfig.is3D) {
+      render3DGraph(canvas, graphConfig, graphColors, graphRotation, graphZoom);
+    } else {
+      render2DGraph(canvas, graphConfig, graphColors, graphPan, graphZoom);
+    }
+  }, [canvasOpen, canvasActiveIndex, canvasBlocks, graphZoom, graphPan, graphRotation, c]);
 
   /** Copy canvas content to clipboard */
   const copyCanvasContent = (index: number) => {
@@ -683,10 +740,26 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500"><PenTool size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-word</h4>
+                  <p className="text-xs" style={{ color: c.textMuted }}>Write essays, stories, articles, letters & documents in a rich canvas editor. Edit inline.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
                 <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500"><Calculator size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-math</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Solve complex equations with step-by-step visual solutions.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500"><LineChart size={24} /></div>
+                <div>
+                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-graph</h4>
+                  <p className="text-xs" style={{ color: c.textMuted }}>Interactive 2D & 3D math graphing like Desmos. Plot functions, equations & surfaces.</p>
                 </div>
               </div>
 
@@ -1023,10 +1096,18 @@ const App: React.FC = () => {
                 ? <Code size={18} style={{ color: c.accent }} />
                 : canvasBlocks[canvasActiveIndex]?.type === 'math'
                 ? <Calculator size={18} style={{ color: '#f59e0b' }} />
+                : canvasBlocks[canvasActiveIndex]?.type === 'word'
+                ? <PenTool size={18} style={{ color: '#10b981' }} />
+                : canvasBlocks[canvasActiveIndex]?.type === 'graph'
+                ? <LineChart size={18} style={{ color: '#f43f5e' }} />
                 : <FileText size={18} style={{ color: '#06b6d4' }} />
               }
               <span className="text-sm font-black uppercase tracking-wider" style={{ 
-                color: canvasBlocks[canvasActiveIndex]?.type === 'code' ? c.accent : canvasBlocks[canvasActiveIndex]?.type === 'math' ? '#f59e0b' : '#06b6d4'
+                color: canvasBlocks[canvasActiveIndex]?.type === 'code' ? c.accent 
+                  : canvasBlocks[canvasActiveIndex]?.type === 'math' ? '#f59e0b' 
+                  : canvasBlocks[canvasActiveIndex]?.type === 'word' ? '#10b981'
+                  : canvasBlocks[canvasActiveIndex]?.type === 'graph' ? '#f43f5e'
+                  : '#06b6d4'
               }}>
                 {canvasBlocks[canvasActiveIndex]?.title || 'Canvas'}
               </span>
@@ -1078,7 +1159,234 @@ const App: React.FC = () => {
           <div className="flex-1 overflow-auto p-0 canvas-pattern">
             {canvasBlocks[canvasActiveIndex] && (
               <div className="h-full">
-                {canvasBlocks[canvasActiveIndex].type === 'explain' ? (
+                {canvasBlocks[canvasActiveIndex].type === 'word' ? (
+                  /* S-word: Rich document editor / canvas (Gemini Canvas-like) */
+                  <div className="h-full flex flex-col">
+                    {/* Edit/View toggle */}
+                    <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
+                      <button
+                        onClick={() => {
+                          if (!wordEditMode) {
+                            setWordEditContent(canvasBlocks[canvasActiveIndex].content);
+                          } else {
+                            // Save edits back to canvas block
+                            const updated = [...canvasBlocks];
+                            updated[canvasActiveIndex] = { ...updated[canvasActiveIndex], content: wordEditContent };
+                            setCanvasBlocks(updated);
+                          }
+                          setWordEditMode(!wordEditMode);
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                        style={{ 
+                          backgroundColor: wordEditMode ? '#10b981' : c.bgTertiary, 
+                          color: wordEditMode ? '#fff' : c.textSecondary,
+                          border: `1px solid ${wordEditMode ? '#10b981' : c.borderPrimary}`,
+                        }}
+                      >
+                        {wordEditMode ? <><Check size={12} className="inline mr-1" />Save</> : <><PenTool size={12} className="inline mr-1" />Edit</>}
+                      </button>
+                      <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: c.textMuted }}>
+                        {wordEditMode ? 'Editing' : 'Preview'}
+                      </span>
+                    </div>
+                    {wordEditMode ? (
+                      /* Edit mode: Plain text editor */
+                      <textarea
+                        value={wordEditContent}
+                        onChange={(e) => setWordEditContent(e.target.value)}
+                        className="flex-1 p-6 text-[15px] leading-relaxed resize-none outline-none custom-scrollbar"
+                        style={{ 
+                          backgroundColor: c.bgPrimary, 
+                          color: c.textPrimary, 
+                          fontFamily: "'Georgia', 'Merriweather', 'Noto Serif', serif",
+                        }}
+                        spellCheck
+                      />
+                    ) : (
+                      /* Preview mode: Rich formatted document */
+                      <div className="flex-1 overflow-auto custom-scrollbar">
+                        <div className="max-w-[680px] mx-auto px-8 py-10 space-y-1" style={{ fontFamily: "'Georgia', 'Merriweather', 'Noto Serif', serif" }}>
+                          {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
+                            const trimmed = line.trim();
+                            const isH1 = trimmed.startsWith('# ');
+                            const isH2 = trimmed.startsWith('## ');
+                            const isH3 = trimmed.startsWith('### ');
+                            const isBlockquote = trimmed.startsWith('> ');
+                            const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
+                            const isNumbered = /^\d+[\.\)]\s/.test(trimmed);
+                            const isSeparator = /^[-=_]{3,}$/.test(trimmed);
+                            const isEmpty = !trimmed;
+
+                            if (isSeparator) return <hr key={i} className="my-8" style={{ borderColor: c.borderPrimary }} />;
+                            if (isEmpty) return <div key={i} className="h-3" />;
+
+                            // Strip markdown prefixes for display
+                            let displayText = trimmed
+                              .replace(/^#{1,3}\s+/, '')
+                              .replace(/^>\s+/, '')
+                              .replace(/^[-*]\s+/, '')
+                              .replace(/^\d+[\.\)]\s+/, '');
+
+                            // Inline formatting: bold, italic, inline code
+                            const formatInline = (text: string) => {
+                              const parts: React.ReactNode[] = [];
+                              const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+                              let lastIndex = 0;
+                              let match;
+                              let key = 0;
+                              while ((match = regex.exec(text)) !== null) {
+                                if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+                                if (match[2]) parts.push(<strong key={key++}><em>{match[2]}</em></strong>);
+                                else if (match[3]) parts.push(<strong key={key++}>{match[3]}</strong>);
+                                else if (match[4]) parts.push(<em key={key++}>{match[4]}</em>);
+                                else if (match[5]) parts.push(<code key={key++} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: c.bgTertiary, color: c.accent }}>{match[5]}</code>);
+                                lastIndex = match.index + match[0].length;
+                              }
+                              if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+                              return parts.length > 0 ? parts : [text];
+                            };
+
+                            if (isH1) return (
+                              <h1 key={i} className="text-3xl font-black mt-10 mb-4 pb-3 border-b-2" style={{ color: c.textPrimary, borderColor: '#10b981', fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
+                                {formatInline(displayText)}
+                              </h1>
+                            );
+                            if (isH2) return (
+                              <h2 key={i} className="text-2xl font-bold mt-8 mb-3 pb-2 border-b" style={{ color: c.textPrimary, borderColor: c.borderPrimary, fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
+                                {formatInline(displayText)}
+                              </h2>
+                            );
+                            if (isH3) return (
+                              <h3 key={i} className="text-xl font-bold mt-6 mb-2" style={{ color: c.textPrimary, fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
+                                {formatInline(displayText)}
+                              </h3>
+                            );
+                            if (isBlockquote) return (
+                              <blockquote key={i} className="pl-5 py-2 my-3 border-l-4 italic" style={{ borderColor: '#10b981', color: c.textSecondary, backgroundColor: 'rgba(16,185,129,0.05)' }}>
+                                {formatInline(displayText)}
+                              </blockquote>
+                            );
+                            if (isBullet) return (
+                              <div key={i} className="flex gap-3 pl-4 text-[15px] leading-relaxed my-1">
+                                <span className="mt-2.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
+                                <span style={{ color: c.textPrimary }}>{formatInline(displayText)}</span>
+                              </div>
+                            );
+                            if (isNumbered) return (
+                              <div key={i} className="flex gap-3 pl-4 text-[15px] leading-relaxed my-1">
+                                <span className="font-bold shrink-0 min-w-[1.5rem] text-right" style={{ color: '#10b981' }}>
+                                  {trimmed.match(/^(\d+)[\.\)]/)?.[1]}.
+                                </span>
+                                <span style={{ color: c.textPrimary }}>{formatInline(displayText)}</span>
+                              </div>
+                            );
+                            return (
+                              <p key={i} className="text-[15px] leading-[1.85] my-1" style={{ color: c.textPrimary }}>
+                                {formatInline(displayText)}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : canvasBlocks[canvasActiveIndex].type === 'graph' ? (
+                  /* S-graph: Interactive 2D/3D math graph (Desmos-like) */
+                  <div className="h-full flex flex-col">
+                    {/* Graph controls toolbar */}
+                    <div className="flex items-center gap-1 px-3 py-2 border-b" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
+                      <button
+                        onClick={() => setGraphZoom(z => Math.min(z * 1.3, 20))}
+                        className="p-2 rounded-lg transition-all hover:scale-105"
+                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
+                        title="Zoom In"
+                      ><ZoomIn size={16} /></button>
+                      <button
+                        onClick={() => setGraphZoom(z => Math.max(z / 1.3, 0.1))}
+                        className="p-2 rounded-lg transition-all hover:scale-105"
+                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
+                        title="Zoom Out"
+                      ><ZoomOut size={16} /></button>
+                      <button
+                        onClick={() => { setGraphZoom(1); setGraphPan({ x: 0, y: 0 }); setGraphRotation({ angleX: 0.6, angleY: 0.8 }); }}
+                        className="p-2 rounded-lg transition-all hover:scale-105"
+                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
+                        title="Reset View"
+                      ><RotateCcw size={16} /></button>
+                      <div className="flex-1" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>
+                        {(() => {
+                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
+                          return cfg.is3D ? '3D Mode' : '2D Mode';
+                        })()}
+                      </span>
+                      <span className="text-[10px] font-bold ml-2 px-2 py-1 rounded" style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}>
+                        {graphZoom.toFixed(1)}x
+                      </span>
+                    </div>
+                    {/* Graph canvas */}
+                    <div className="flex-1 relative" style={{ backgroundColor: c.bgPrimary }}>
+                      <canvas
+                        ref={graphCanvasRef}
+                        className="w-full h-full cursor-grab active:cursor-grabbing"
+                        style={{ display: 'block' }}
+                        onMouseDown={(e) => {
+                          setGraphDragging(true);
+                          setGraphDragStart({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseMove={(e) => {
+                          if (!graphDragging) return;
+                          const dx = (e.clientX - graphDragStart.x) / 100;
+                          const dy = (e.clientY - graphDragStart.y) / 100;
+                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
+                          if (cfg.is3D) {
+                            setGraphRotation(r => ({ angleX: r.angleX + dy * 0.5, angleY: r.angleY + dx * 0.5 }));
+                          } else {
+                            setGraphPan(p => ({ x: p.x + dx, y: p.y + dy }));
+                          }
+                          setGraphDragStart({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseUp={() => setGraphDragging(false)}
+                        onMouseLeave={() => setGraphDragging(false)}
+                        onWheel={(e) => {
+                          e.preventDefault();
+                          setGraphZoom(z => Math.max(0.1, Math.min(20, z * (e.deltaY < 0 ? 1.1 : 0.9))));
+                        }}
+                        onTouchStart={(e) => {
+                          if (e.touches.length === 1) {
+                            setGraphDragging(true);
+                            setGraphDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+                          }
+                        }}
+                        onTouchMove={(e) => {
+                          if (!graphDragging || e.touches.length !== 1) return;
+                          const dx = (e.touches[0].clientX - graphDragStart.x) / 100;
+                          const dy = (e.touches[0].clientY - graphDragStart.y) / 100;
+                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
+                          if (cfg.is3D) {
+                            setGraphRotation(r => ({ angleX: r.angleX + dy * 0.5, angleY: r.angleY + dx * 0.5 }));
+                          } else {
+                            setGraphPan(p => ({ x: p.x + dx, y: p.y + dy }));
+                          }
+                          setGraphDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+                        }}
+                        onTouchEnd={() => setGraphDragging(false)}
+                      />
+                    </div>
+                    {/* Expression list */}
+                    <div className="border-t px-3 py-2 space-y-1 max-h-32 overflow-auto custom-scrollbar" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
+                      {(() => {
+                        const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
+                        return cfg.expressions.map((expr, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: expr.color }} />
+                            <span className="font-mono truncate" style={{ color: c.textPrimary }}>{expr.raw}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                ) : canvasBlocks[canvasActiveIndex].type === 'explain' ? (
                   /* S-explain: Detailed analysis display */
                   <div className="p-8 space-y-2 overflow-auto custom-scrollbar h-full" style={{ backgroundColor: `${c.bgPrimary}f2` }}>
                     {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
@@ -1197,11 +1505,19 @@ const App: React.FC = () => {
                 ? `${langDisplayName(canvasBlocks[canvasActiveIndex]?.language)} | ${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines`
                 : canvasBlocks[canvasActiveIndex]?.type === 'math'
                 ? `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} steps`
+                : canvasBlocks[canvasActiveIndex]?.type === 'word'
+                ? `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines | Document`
+                : canvasBlocks[canvasActiveIndex]?.type === 'graph'
+                ? (() => { const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex]?.content || ''); return `${cfg.expressions.length} expression${cfg.expressions.length !== 1 ? 's' : ''} | ${cfg.is3D ? '3D' : '2D'}`; })()
                 : `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines | Detailed Analysis`
               }
             </span>
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>
-              {canvasBlocks[canvasActiveIndex]?.type === 'code' ? 'S-CODE' : canvasBlocks[canvasActiveIndex]?.type === 'math' ? 'S-MATH' : 'S-EXPLAIN'}
+              {canvasBlocks[canvasActiveIndex]?.type === 'code' ? 'S-CODE' 
+                : canvasBlocks[canvasActiveIndex]?.type === 'math' ? 'S-MATH' 
+                : canvasBlocks[canvasActiveIndex]?.type === 'word' ? 'S-WORD'
+                : canvasBlocks[canvasActiveIndex]?.type === 'graph' ? 'S-GRAPH'
+                : 'S-EXPLAIN'}
             </span>
           </div>
         </div>
@@ -1271,17 +1587,25 @@ const App: React.FC = () => {
                               }}
                             >
                               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110" style={{ 
-                                backgroundColor: block.type === 'code' ? c.accentSubtle : block.type === 'math' ? 'rgba(245,158,11,0.1)' : 'rgba(6,182,212,0.1)',
-                                color: block.type === 'code' ? c.accent : block.type === 'math' ? '#f59e0b' : '#06b6d4',
+                                backgroundColor: block.type === 'code' ? c.accentSubtle 
+                                  : block.type === 'math' ? 'rgba(245,158,11,0.1)' 
+                                  : block.type === 'word' ? 'rgba(16,185,129,0.1)'
+                                  : block.type === 'graph' ? 'rgba(244,63,94,0.1)'
+                                  : 'rgba(6,182,212,0.1)',
+                                color: block.type === 'code' ? c.accent 
+                                  : block.type === 'math' ? '#f59e0b' 
+                                  : block.type === 'word' ? '#10b981'
+                                  : block.type === 'graph' ? '#f43f5e'
+                                  : '#06b6d4',
                               }}>
-                                {block.type === 'code' ? <Code size={20} /> : block.type === 'math' ? <Calculator size={20} /> : <FileText size={20} />}
+                                {block.type === 'code' ? <Code size={20} /> : block.type === 'math' ? <Calculator size={20} /> : block.type === 'word' ? <PenTool size={20} /> : block.type === 'graph' ? <LineChart size={20} /> : <FileText size={20} />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-[11px] font-black uppercase tracking-widest opacity-60" style={{ color: c.textMuted }}>
-                                  {block.type === 'code' ? 'S-CODE' : block.type === 'math' ? 'S-MATH' : 'S-EXPLAIN'}
+                                  {block.type === 'code' ? 'S-CODE' : block.type === 'math' ? 'S-MATH' : block.type === 'word' ? 'S-WORD' : block.type === 'graph' ? 'S-GRAPH' : 'S-EXPLAIN'}
                                 </div>
                                 <div className="text-sm font-bold truncate" style={{ color: c.textPrimary }}>
-                                  {block.title || (block.type === 'code' ? langDisplayName(block.language) : block.type === 'math' ? 'Solution' : 'Analysis')}
+                                  {block.title || (block.type === 'code' ? langDisplayName(block.language) : block.type === 'math' ? 'Solution' : block.type === 'word' ? 'Document' : block.type === 'graph' ? 'Graph' : 'Analysis')}
                                 </div>
                               </div>
                               <div className="p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: c.bgTertiary, color: c.accent }}>
