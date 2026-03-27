@@ -193,6 +193,87 @@ const App: React.FC = () => {
     }
   };
 
+  /** Format math text: convert LaTeX-like notation to styled React elements */
+  const formatMathText = (text: string, colors: typeof c): React.ReactNode => {
+    if (!text) return null;
+    const parts: React.ReactNode[] = [];
+    // Match: \frac{a}{b}, \sqrt{x}, \(...\), \[...\], **bold**, x_{sub}, x^{sup}, $...$
+    const regex = /(\$\$(.+?)\$\$|\$(.+?)\$|\\frac\{([^}]+)\}\{([^}]+)\}|\\sqrt\{([^}]+)\}|\\text\{([^}]+)\}|\\(?:left|right)[()[\]{}|]|\\[a-zA-Z]+|\\\((.+?)\\\)|\\\[(.+?)\\\]|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+    
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      
+      if (match[2] || match[3]) {
+        // $...$ or $$...$$ inline/display math
+        const mathContent = match[2] || match[3];
+        parts.push(<span key={key++} className="font-bold px-1" style={{ color: colors.accent }}>{mathContent}</span>);
+      } else if (match[4] && match[5]) {
+        // \frac{num}{den}
+        parts.push(
+          <span key={key++} className="inline-flex flex-col items-center mx-1 align-middle" style={{ fontSize: '0.85em' }}>
+            <span className="border-b px-1" style={{ borderColor: colors.textMuted, color: colors.accent }}>{match[4]}</span>
+            <span className="px-1" style={{ color: colors.accent }}>{match[5]}</span>
+          </span>
+        );
+      } else if (match[6]) {
+        // \sqrt{x}
+        parts.push(<span key={key++} style={{ color: colors.accent }}>{'√('}{match[6]}{')'}</span>);
+      } else if (match[7]) {
+        // \text{...}
+        parts.push(<span key={key++} style={{ fontFamily: 'sans-serif', color: colors.textPrimary }}>{match[7]}</span>);
+      } else if (match[8]) {
+        // \(...\) inline math
+        parts.push(<span key={key++} className="font-bold px-0.5" style={{ color: colors.accent }}>{match[8]}</span>);
+      } else if (match[9]) {
+        // \[...\] display math
+        parts.push(<div key={key++} className="font-bold py-1 text-center" style={{ color: colors.accent }}>{match[9]}</div>);
+      } else if (match[10]) {
+        // **bold**
+        parts.push(<strong key={key++}>{match[10]}</strong>);
+      } else if (match[11]) {
+        // *italic*
+        parts.push(<em key={key++}>{match[11]}</em>);
+      } else if (match[12]) {
+        // `code`
+        parts.push(<code key={key++} className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: colors.bgTertiary, color: colors.accent }}>{match[12]}</code>);
+      } else if (match[0].startsWith('\\')) {
+        // Other LaTeX commands: \alpha, \beta, \pi, \infty, etc.
+        const cmd = match[0].slice(1);
+        const symbols: Record<string, string> = {
+          alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
+          eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
+          nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ',
+          upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+          Alpha: 'Α', Beta: 'Β', Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ',
+          Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+          infty: '∞', infinity: '∞', pm: '±', mp: '∓', times: '×', div: '÷',
+          cdot: '·', star: '⋆', leq: '≤', geq: '≥', neq: '≠', approx: '≈',
+          equiv: '≡', subset: '⊂', supset: '⊃', in: '∈', notin: '∉',
+          forall: '∀', exists: '∃', nabla: '∇', partial: '∂',
+          sum: '∑', prod: '∏', int: '∫', oint: '∮',
+          to: '→', rightarrow: '→', leftarrow: '←', Rightarrow: '⇒', Leftarrow: '⇐',
+          implies: '⇒', iff: '⇔',
+          Re: 'ℝ', Im: 'ℑ', mathbb: '', ldots: '…', cdots: '⋯', vdots: '⋮',
+          boxed: '', quad: '  ', qquad: '    ',
+          left: '', right: '', ln: 'ln', log: 'log', sin: 'sin', cos: 'cos', tan: 'tan',
+          lim: 'lim', max: 'max', min: 'min', sup: 'sup', inf: 'inf',
+        };
+        parts.push(<span key={key++} style={{ color: colors.accent }}>{symbols[cmd] || match[0]}</span>);
+      }
+      
+      lastIndex = match.index + match[0].length;
+      key++;
+    }
+    
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    
+    // Post-process: convert x_{sub} and x^{sup} patterns in remaining text
+    return parts.length > 0 ? parts : text;
+  };
+
   /** Render markdown-formatted text for chat bubbles */
   const renderMarkdown = (text: string, isUser: boolean): React.ReactNode => {
     if (!text) return null;
@@ -1598,40 +1679,113 @@ const App: React.FC = () => {
                     </pre>
                   </div>
                 ) : (
-                  /* S-math: Math solution display */
-                  <div className="p-6 space-y-4">
-                    <div 
-                      className="rounded-2xl border p-5"
-                      style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}
-                    >
-                      {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
-                        const trimmed = line.trim();
-                        // Detect section headers (lines ending with :)
-                        const isHeader = /^(step|answer|solution|given|find|formula|result|proof|therefore|hence)/i.test(trimmed);
-                        // Detect final answer lines
-                        const isFinalAnswer = /^(answer|result|therefore|hence|final|∴)/i.test(trimmed);
-                        // Detect separator lines
-                        const isSeparator = /^[-=_]{3,}$/.test(trimmed);
-                        
-                        if (isSeparator) {
-                          return <hr key={i} className="my-3" style={{ borderColor: c.borderPrimary }} />;
-                        }
-                        
+                  /* S-math: Enhanced math solution display with LaTeX-like rendering */
+                  <div className="p-5 space-y-3 overflow-auto custom-scrollbar h-full">
+                    {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
+                      const trimmed = line.trim();
+                      if (!trimmed) return <div key={i} className="h-3" />;
+
+                      // Separator
+                      if (/^[-=_]{3,}$/.test(trimmed)) {
+                        return <hr key={i} className="my-4" style={{ borderColor: c.borderPrimary }} />;
+                      }
+
+                      // Step headers: "Step N: Title" or "Step N. Title"
+                      const stepMatch = trimmed.match(/^(Step\s+\d+)\s*[:.]\s*(.+)/i);
+                      if (stepMatch) {
                         return (
-                          <div 
-                            key={i} 
-                            className={`${isHeader ? 'font-black text-base mt-4 mb-1' : 'text-sm'} ${isFinalAnswer ? 'text-lg font-black mt-4 p-3 rounded-xl' : ''} leading-relaxed`}
-                            style={{ 
-                              color: isHeader ? c.accent : isFinalAnswer ? '#22c55e' : c.textPrimary,
-                              backgroundColor: isFinalAnswer ? 'rgba(34,197,94,0.08)' : 'transparent',
-                              fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-                            }}
-                          >
-                            {trimmed || '\u00A0'}
+                          <div key={i} className="flex items-start gap-3 mt-5 mb-2">
+                            <span className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-black uppercase" style={{ backgroundColor: `${c.accent}20`, color: c.accent }}>
+                              {stepMatch[1]}
+                            </span>
+                            <span className="font-bold text-base pt-0.5" style={{ color: c.textPrimary }}>{formatMathText(stepMatch[2], c)}</span>
                           </div>
                         );
-                      })}
-                    </div>
+                      }
+
+                      // Final answer: "Answer:", "Result:", "∴", "Therefore:"
+                      const isFinalAnswer = /^(answer|result|therefore|hence|final\s*answer|∴|conclusion)\s*[:=]/i.test(trimmed);
+                      if (isFinalAnswer) {
+                        return (
+                          <div key={i} className="mt-4 p-4 rounded-xl border-2" style={{ backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.3)' }}>
+                            <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: '#22c55e' }}>Final Answer</div>
+                            <div className="text-lg font-bold" style={{ color: '#22c55e', fontFamily: "'Fira Code', monospace" }}>
+                              {formatMathText(trimmed.replace(/^(answer|result|therefore|hence|final\s*answer|∴|conclusion)\s*[:=]\s*/i, ''), c)}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Section headers: "Given:", "Find:", "Formula:", "Solution:", "Method:", "Iteration:", "Table:"
+                      const isSectionHeader = /^(given|find|formula|solution|method|approach|iteration|table|proof|derivation|substitut|simplif|comput|evaluat|newton|bisection|secant|euler|runge|trapezoid|simpson)\s*[:.]/i.test(trimmed);
+                      if (isSectionHeader) {
+                        const colonIdx = trimmed.search(/[:.]/);
+                        return (
+                          <div key={i} className="mt-4 mb-1">
+                            <span className="font-black text-sm uppercase tracking-wider" style={{ color: '#f59e0b' }}>{trimmed.slice(0, colonIdx + 1)}</span>
+                            {trimmed.length > colonIdx + 1 && (
+                              <span className="text-sm ml-2" style={{ color: c.textPrimary, fontFamily: "'Fira Code', monospace" }}>
+                                {formatMathText(trimmed.slice(colonIdx + 1).trim(), c)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // Table rows: lines with | separators (iteration tables)
+                      if (trimmed.includes('|') && trimmed.split('|').length >= 3) {
+                        const cells = trimmed.split('|').map(cell => cell.trim()).filter(cell => cell && !/^[-:]+$/.test(cell));
+                        if (cells.length >= 2) {
+                          const isHeaderRow = i > 0 && canvasBlocks[canvasActiveIndex].content.split('\n')[i + 1]?.trim().match(/^[\s|:-]+$/);
+                          return (
+                            <div key={i} className="flex gap-0 font-mono text-xs" style={{ fontFamily: "'Fira Code', monospace" }}>
+                              {cells.map((cell, ci) => (
+                                <div key={ci} className={`px-3 py-1.5 border ${isHeaderRow ? 'font-bold' : ''}`} style={{ 
+                                  borderColor: c.borderPrimary, 
+                                  backgroundColor: isHeaderRow ? `${c.accent}10` : 'transparent',
+                                  color: isHeaderRow ? c.accent : c.textPrimary,
+                                  minWidth: '80px',
+                                }}>
+                                  {formatMathText(cell, c)}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                      }
+
+                      // Table separator: skip lines like |---|---|
+                      if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes('|')) {
+                        return null;
+                      }
+
+                      // Bullet points
+                      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                        return (
+                          <div key={i} className="flex gap-2 pl-4 text-sm" style={{ fontFamily: "'Fira Code', monospace" }}>
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
+                            <span style={{ color: c.textPrimary }}>{formatMathText(trimmed.slice(2), c)}</span>
+                          </div>
+                        );
+                      }
+
+                      // Arrow/implication lines: → or ⇒ or =>
+                      const isImplication = trimmed.startsWith('→') || trimmed.startsWith('⇒') || trimmed.startsWith('=>');
+                      
+                      // Regular math content line
+                      return (
+                        <div 
+                          key={i} 
+                          className={`text-sm leading-relaxed ${isImplication ? 'pl-4' : ''}`}
+                          style={{ 
+                            color: c.textPrimary,
+                            fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                          }}
+                        >
+                          {formatMathText(trimmed, c)}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
