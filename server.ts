@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import OpenAI from "openai";
+import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,11 +14,14 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cors());
 
   // Request logging middleware
   app.use((req, res, next) => {
     if (req.url.startsWith('/api')) {
       console.log(`[SERVER] ${new Date().toISOString()} ${req.method} ${req.url}`);
+      console.log(`[SERVER] Headers: ${JSON.stringify(req.headers)}`);
     }
     next();
   });
@@ -36,7 +40,8 @@ async function startServer() {
   });
 
   // API Routes
-  app.post(["/api/chat", "/api/chat/completions"], async (req, res) => {
+  // Use a more flexible route pattern to handle trailing slashes and subpaths
+  app.post(["/api/chat", "/api/chat/", "/api/chat/completions", "/api/chat/completions/"], async (req, res) => {
     const { messages, model, max_tokens, baseURL, apiKey: clientApiKey } = req.body;
     const apiKey = clientApiKey || process.env.API_KEY;
     
@@ -104,6 +109,12 @@ async function startServer() {
         details: error.stack ? "Check server logs" : undefined
       });
     }
+  });
+
+  // Catch-all for undefined API routes
+  app.all("/api/*", (req, res) => {
+    console.log(`[SERVER] 404 Not Found: ${req.method} ${req.url}`);
+    res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
   });
 
   // Vite middleware for development
