@@ -112,7 +112,7 @@ async function startServer() {
   });
 
   // Catch-all for undefined API routes
-  app.all("/api/*", (req, res) => {
+  app.all("/api/*all", (req, res) => {
     console.log(`[SERVER] 404 Not Found: ${req.method} ${req.url}`);
     res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
   });
@@ -129,7 +129,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
