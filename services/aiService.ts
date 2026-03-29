@@ -66,7 +66,6 @@ const probeModels = async (apiKey: string): Promise<void> => {
             messages: [{ role: 'user', content: 'hi' }],
             model,
             apiKey,
-            baseURL: _ep(),
           }),
         });
 
@@ -93,7 +92,6 @@ const probeModels = async (apiKey: string): Promise<void> => {
             messages: [{ role: 'user', content: 'hi' }],
             model,
             apiKey,
-            baseURL: _ep(),
           }),
         });
 
@@ -375,6 +373,29 @@ TECHNICAL:
   return basePrompt;
 };
 
+/**
+ * Safely parses an error response from the server.
+ */
+const parseErrorResponse = async (response: Response): Promise<string> => {
+  let errorMsg = `Server Error (${response.status})`;
+  try {
+    const text = await response.text();
+    if (!text) return errorMsg;
+    
+    try {
+      const errorData = JSON.parse(text);
+      errorMsg = errorData.error || errorMsg;
+      if (errorData.type) errorMsg += ` [${errorData.type}]`;
+    } catch (e) {
+      // Fallback to truncated text if not JSON
+      errorMsg = text.substring(0, 150) || errorMsg;
+    }
+  } catch (e) {
+    errorMsg = response.statusText || errorMsg;
+  }
+  return errorMsg;
+};
+
 export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: boolean, error?: string}> => {
   const key = getActiveKey(profile);
   if (!key) return { healthy: false, error: "No Active Key Found" };
@@ -395,23 +416,11 @@ export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: b
         messages: [{ role: 'user', content: 'ping' }],
         model: model,
         apiKey: key,
-        baseURL: _ep(),
       }),
     });
 
     if (!response.ok) {
-      let errorMsg = "Server Error";
-      try {
-        const errorData = await response.json();
-        errorMsg = errorData.error || errorMsg;
-      } catch (e) {
-        try {
-          const text = await response.text();
-          errorMsg = text.substring(0, 200) || errorMsg;
-        } catch (e2) {
-          errorMsg = response.statusText || errorMsg;
-        }
-      }
+      const errorMsg = await parseErrorResponse(response);
       throw new Error(errorMsg);
     }
     
@@ -502,25 +511,12 @@ export const streamChatResponse = async (
         messages: messages,
         model: selectedModel,
         apiKey: apiKey,
-        baseURL: _ep(),
         max_tokens: maxTokens,
       }),
     });
 
     if (!response.ok) {
-      let errorMsg = "Server Error";
-      try {
-        const errorData = await response.json();
-        errorMsg = errorData.error || errorMsg;
-      } catch (e) {
-        // Fallback to text if JSON parsing fails
-        try {
-          const text = await response.text();
-          errorMsg = text.substring(0, 200) || errorMsg;
-        } catch (e2) {
-          errorMsg = response.statusText || errorMsg;
-        }
-      }
+      const errorMsg = await parseErrorResponse(response);
       throw { status: response.status, message: errorMsg };
     }
 
@@ -529,13 +525,15 @@ export const streamChatResponse = async (
 
     const decoder = new TextDecoder();
     let fullText = "";
+    let buffer = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n");
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         if (line.startsWith("data: ")) {

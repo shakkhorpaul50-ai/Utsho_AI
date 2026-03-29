@@ -551,7 +551,7 @@ const App: React.FC = () => {
           // Get AI response
           const { streamChatResponse: _ , ...rest } = await import('./services/aiService');
           const OpenAI = (await import('openai')).default;
-          const client = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1', dangerouslyAllowBrowser: true });
+          const client = new OpenAI({ apiKey, baseURL: '/api', dangerouslyAllowBrowser: true });
           const response = await client.chat.completions.create({
             model: 'llama-3.3-70b-versatile',
             messages: [

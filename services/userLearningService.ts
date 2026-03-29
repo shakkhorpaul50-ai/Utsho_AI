@@ -61,8 +61,8 @@ const DEFAULT_CONTEXT: UserContext = {
  * Default service endpoint (encoded for security).
  */
 const _ep = (): string => {
-  const d = [104,116,116,112,115,58,47,47,97,112,105,46,103,114,111,113,46,99,111,109,47,111,112,101,110,97,105,47,118,49];
-  return d.map(c => String.fromCharCode(c)).join('');
+  // Use the server-side proxy endpoint
+  return "/api";
 };
 
 /**
