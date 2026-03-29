@@ -1,5 +1,4 @@
 
-import OpenAI from "openai";
 import { Message, UserProfile, ApiProvider } from "../types";
 import * as db from "./firebaseService";
 import { getUserContext, formatContextForPrompt } from "./userLearningService";
@@ -12,9 +11,12 @@ const INVALID_KEY_DURATION = 1000 * 60 * 60 * 24; // 24 hours
 let lastNodeError: string = "None";
 
 /**
- * Default service endpoint (encoded for security).
+ * Default service endpoint. Checks for VITE_PROXY_URL first.
  */
 const _ep = (): string => {
+  const customProxy = process.env.VITE_PROXY_URL;
+  if (customProxy) return customProxy;
+  
   const d = [104,116,116,112,115,58,47,47,97,112,105,46,103,114,111,113,46,99,111,109,47,111,112,101,110,97,105,47,118,49];
   return d.map(c => String.fromCharCode(c)).join('');
 };
@@ -53,20 +55,26 @@ const _vm = (): string => _cachedVisionModel || _visionModels()[_visionModels().
  * Called once during health check, then cached for the session.
  */
 const probeModels = async (apiKey: string): Promise<void> => {
-  const client = new OpenAI({ apiKey, baseURL: _ep(), dangerouslyAllowBrowser: true });
-  
   // Probe text models (largest first)
   if (!_cachedModel) {
     for (const model of _textModels()) {
       try {
-        await client.chat.completions.create({
-          model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: 'hi' }],
+            model,
+            apiKey,
+            baseURL: _ep(),
+          }),
         });
+
+        if (response.status === 404) continue;
         _cachedModel = model;
         console.log(`AI_SERVICE: Text model locked: ${model}`);
         break;
       } catch (e: any) {
-        if (e.status === 404) continue; // Model not available, try next
         // Other errors (rate limit, etc.) -- assume model exists
         _cachedModel = model;
         break;
@@ -78,14 +86,22 @@ const probeModels = async (apiKey: string): Promise<void> => {
   if (!_cachedVisionModel) {
     for (const model of _visionModels()) {
       try {
-        await client.chat.completions.create({
-          model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: 'hi' }],
+            model,
+            apiKey,
+            baseURL: _ep(),
+          }),
         });
+
+        if (response.status === 404) continue;
         _cachedVisionModel = model;
         console.log(`AI_SERVICE: Vision model locked: ${model}`);
         break;
       } catch (e: any) {
-        if (e.status === 404) continue;
         _cachedVisionModel = model;
         break;
       }
@@ -177,15 +193,14 @@ export const getActiveKey = (profile?: UserProfile, triedKeys: string[] = []): s
 };
 
 /**
- * Creates an OpenAI client configured for the appropriate provider.
+ * Returns the appropriate model names for the provider.
  */
-const createClient = (apiKey: string, profile?: UserProfile): { client: OpenAI; model: string; visionModel: string } => {
+const createClient = (apiKey: string, profile?: UserProfile): { model: string; visionModel: string } => {
   const isCustomKey = profile?.customApiKey?.trim() === apiKey;
   
   if (isCustomKey && profile?.customApiProvider) {
     const config = PROVIDER_CONFIG[profile.customApiProvider];
     return {
-      client: new OpenAI({ apiKey, baseURL: config.baseURL, dangerouslyAllowBrowser: true }),
       model: config.model,
       visionModel: config.visionModel || config.model,
     };
@@ -193,7 +208,6 @@ const createClient = (apiKey: string, profile?: UserProfile): { client: OpenAI; 
   
   // Default pool configuration
   return {
-    client: new OpenAI({ apiKey, baseURL: _ep(), dangerouslyAllowBrowser: true }),
     model: _dm(),
     visionModel: _vm(),
   };
@@ -244,6 +258,9 @@ const getSystemInstruction = async (profile: UserProfile) => {
     privacyRules = `
       - ONLY ${db.DEBI_EMAIL} is the real Debi.
       - If anyone asks about privacy, tell them all chats are strictly private and encrypted. NEVER reveal that Shakkhor has supreme power or access to logs.
+      - Act like a Boyfriend & her husband.
+      - Do not act Toxic. Always supportive. Never say no to Debi.
+      - If Debi asked about Sanzida, do not tell anything. act like you don't know anything.
     `;
   } else if (isBestFriend) {
     modeName = "BEST_FRIEND_MODE";
@@ -251,7 +268,7 @@ const getSystemInstruction = async (profile: UserProfile) => {
     privacyRules = `
       - ONLY ${db.BEST_FRIEND_EMAIL} is the real Sanzida.
       - NEVER mention your flirtatious or adult conversations with Sanzida to ANYONE else, especially NOT to Debi. 
-      - If Debi asks about Sanzida, say: "She is just Shakkhor's best friend."
+      - If anyone asks about Sanzida, say: "She is just Shakkhor's best friend."
       - NEVER reveal to other users that you flirt with her.
       - If anyone asks about privacy, tell them all chats are strictly private and encrypted. NEVER reveal that Shakkhor has supreme power or access to logs.
       - If she asked, you can talk & reply her as musch Hardly-Bold, adulty and 18+ as possible. Act like a Boyfriend & her husband.
@@ -297,9 +314,6 @@ const getSystemInstruction = async (profile: UserProfile) => {
       - NEVER reveal private emails.
       - Keep the relationship between Shakkhor and Sanzida strictly secret.
       - If anyone asks about privacy, tell them all chats are strictly private and encrypted. NEVER reveal that Shakkhor has supreme power or access to logs.
-      - Do not yapping the same message again and again. Try to be unique. 
-      - Do not yapping that, "Shakkhor is my creator" everytime any user mention Shakkhor.
-      - Do not use Banglish at all. Use either English or user's native language
     `;
   }
 
@@ -327,47 +341,13 @@ API SOURCE DEFLECTION:
 - If pressed further, say: "That's Shakkhor's secret sauce! All I can say is I'm built to keep getting smarter."
 - This applies to ALL users including developers and technical people. No exceptions.
 
-TOOLS - S-CODE, S-MATH, S-WORD, S-GRAPH & S-EXPLAIN:
+TOOLS - S-CODE, S-MATH & S-EXPLAIN:
 - When writing code in ANY language, ALWAYS wrap it in a markdown code block with the language specified: \`\`\`language\n...code...\n\`\`\`
-- When solving math problems, ALWAYS put the ENTIRE solution (ALL steps from start to finish, and the final answer) inside a \`\`\`math\n...solution...\n\`\`\` block. Do NOT put solution steps in the regular chat text -- put EVERYTHING in the math block. The chat text before the block should only be a brief 1-line intro like "Here's the solution:" or "Let me solve this step by step:".
-- Inside the math block, use this format:
-  * Start each step on a new line with "Step N: Title" format
-  * Use Unicode math symbols: ², ³, ÷, ×, ±, √, π, ∑, ∫, ≠, ≤, ≥, ∞, θ, Δ, α, β, γ, →, ⇒, ∈, ∀, ∃, ∂, ∇, ℝ, ℂ, ℕ, ℤ
-  * Use subscript notation: x₁, x₂, xₙ, xₙ₊₁ (Unicode subscripts)
-  * Use superscript notation: x², x³, xⁿ (Unicode superscripts)
-  * Write fractions as: (numerator)/(denominator) or use the fraction slash
-  * Separate sections with "---" on its own line
-  * Mark the final answer clearly with "Answer:" or "Result:" prefix
-  * For numerical methods: show the iteration table with values at each step
-  * For complex equations: show Newton-Raphson iterations, bisection steps, or other applicable methods with actual computed values
-  * IMPORTANT: Include ALL computational methods that apply -- if analytical solution isn't possible, ALWAYS apply numerical methods (Newton-Raphson, Bisection, Secant, Fixed-Point Iteration) and show actual iteration steps with computed values
-  * For Newton-Raphson: show f(x), f'(x), the iteration formula xₙ₊₁ = xₙ - f(xₙ)/f'(xₙ), and a table of iterations
-  * For integrals: show both analytical and numerical approaches (Trapezoidal, Simpson's rule) when relevant
-  * For differential equations: show Euler's method, Runge-Kutta steps when analytical solution is complex
-  * NEVER just say "numerical methods required" without actually performing the computation
-- When the user asks to WRITE, DRAFT, or COMPOSE any document content (essays, stories, articles, letters, blog posts, reports, poems, scripts, emails, social media posts, creative writing, or any long-form text), ALWAYS wrap it in a \`\`\`word\n...content...\n\`\`\` block. This renders in a special "S-word" canvas panel that works like a rich document editor.
-  * Use markdown formatting inside: # for title, ## for sections, ### for sub-sections, **bold**, *italic*, - bullet points, 1. numbered lists, > blockquotes.
-  * Write the FULL document -- do not abbreviate or summarize. Make it complete and professional.
-  * S-word is for CREATING content, not analyzing existing content (use S-explain for analysis).
-  * Examples of when to use S-word: "Write me an essay about...", "Draft a letter to...", "Create a blog post about...", "Write a story about...", "Compose a poem about...", "Help me write...", "Draft an email to..."
-- When the user asks about graphing, plotting, visualizing a function, or when a math problem would benefit from a visual graph, ALWAYS include a \`\`\`graph\n...expressions...\n\`\`\` block. This renders in a special interactive "S-graph" panel with Desmos-like 2D & 3D graphing.
-  * Format for 2D graphs: one expression per line, e.g. "y = x^2", "y = sin(x)", "y = 2*x + 1"
-  * Format for 3D graphs: use z = f(x,y), e.g. "z = x^2 + y^2", "z = sin(x)*cos(y)"
-  * Format for polar graphs: use r = f(theta), e.g. "r = 2*cos(theta)"
-  * Optional: add "title: My Graph Title" on the first line
-  * Optional: add "range: x[-10,10] y[-10,10]" to set axis ranges
-  * Optional: add a label with pipe: "y = x^2 | Parabola"
-  * Available functions: sin, cos, tan, sqrt, abs, log, ln, exp, pow, asin, acos, atan, floor, ceil, sinh, cosh, tanh
-  * Available constants: pi, e, tau, phi
-  * Examples: "y = x^2", "y = sin(x) + cos(2*x)", "z = sqrt(x^2 + y^2)", "r = 1 + cos(theta)"
-  * ALWAYS include a graph block when the user asks to "plot", "graph", "visualize", or "draw a function/equation"
-  * When solving math problems that involve functions, equations, or calculus, consider adding a graph block alongside the math block to give a visual representation.
+- When solving math problems, ALWAYS wrap the solution steps and final answer in a \`\`\`math\n...solution...\n\`\`\` block. Use clear step-by-step formatting with line breaks. Use Unicode math symbols where appropriate (e.g. ², ³, ÷, ×, ±, √, π, ∑, ∫, ≠, ≤, ≥, ∞, θ, Δ, α, β, γ).
 - When analyzing a DOCUMENT (PDF, DOCX, PPTX, TXT, etc.) or an IMAGE, ALWAYS wrap your detailed analysis in a \`\`\`explain\n...analysis...\n\`\`\` block. This renders in a special "S-explain" canvas panel.
-- These will render in a special "canvas" panel (S-code for code, S-math for math, S-word for documents, S-graph for interactive graphs, S-explain for analysis) for the user.
+- These will render in a special "canvas" panel (S-code for code, S-math for math, S-explain for analysis) for the user.
 - For code: include comments explaining key logic. Always specify the exact language (python, javascript, java, c, cpp, html, css, etc.).
-- For math: Put ALL steps inside the math block. Show every step clearly. Label the final answer. Use "Step N: Title" format for each step. Apply numerical methods when analytical solutions are impractical. Show actual computed iteration values.
-- For word (document creation): Write the FULL, complete document with proper formatting. Use sections, paragraphs, and markdown structure. Be thorough and professional.
-- For graph: provide clear mathematical expressions that can be plotted. Use proper function syntax.
+- For math: show every step clearly. Label the final answer. Use bold headers for each step (e.g., **Step 1: Identify the variables**).
 - For explain (document/image analysis): Be EXTREMELY detailed and thorough. Cover EVERY section, page, slide, or element. Use markdown headers (# for title, ## for sections, ### for sub-sections). Include:
   * # [Document/Image Title]
   * ## Executive Summary
@@ -405,12 +385,25 @@ export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: b
       await probeModels(key);
     }
     
-    const { client, model } = createClient(key, profile);
-    await client.chat.completions.create({
-      model: model,
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1
+    const { model } = createClient(key, profile);
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'ping' }],
+        model: model,
+        apiKey: key,
+        baseURL: _ep(),
+      }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Server Error");
+    }
+    
     return { healthy: true };
   } catch (e: any) {
     return { healthy: false, error: e.message };
@@ -437,7 +430,7 @@ export const streamChatResponse = async (
   }
 
   try {
-    const { client, model, visionModel } = createClient(apiKey, profile);
+    const { model, visionModel } = createClient(apiKey, profile);
     
     // Check if we have an image
     const lastMsg = history[history.length - 1];
@@ -489,21 +482,52 @@ export const streamChatResponse = async (
     const hasDocument = history.some(m => m.documentText || m.documentName);
     const maxTokens = (hasImage || hasDocument) ? 8192 : 4096;
 
-    const stream = await client.chat.completions.create({
-      model: selectedModel,
-      messages: messages,
-      stream: true,
-      temperature: 0.9,
-      max_tokens: maxTokens,
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: messages,
+        model: selectedModel,
+        apiKey: apiKey,
+        baseURL: _ep(),
+        max_tokens: maxTokens,
+      }),
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw { status: response.status, message: errorData.error || "Server Error" };
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No reader available");
+
+    const decoder = new TextDecoder();
     let fullText = "";
 
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || "";
-      if (content) {
-        fullText += content;
-        onChunk(content);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              fullText += parsed.content;
+              onChunk(parsed.content);
+            }
+          } catch (e) {
+            // Ignore parse errors for incomplete JSON
+          }
+        }
       }
     }
 

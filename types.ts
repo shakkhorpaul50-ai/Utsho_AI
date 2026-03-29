@@ -16,7 +16,7 @@ export interface UserProfile {
   preferredLanguage?: string;
 }
 
-export type CanvasType = 'code' | 'math' | 'explain' | 'word' | 'graph';
+export type CanvasType = 'code' | 'math' | 'explain';
 
 export interface CanvasBlock {
   type: CanvasType;

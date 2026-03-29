@@ -1,13 +1,12 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
 import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
 import { processAdminCommand } from './services/adminCommandService';
-import { parseGraphBlock, render2DGraph, render3DGraph, GraphConfig } from './services/mathGraphService';
 import * as db from './services/firebaseService';
 import { useTheme } from './ThemeContext';
 import { themes, themeNames, ThemeName } from './themes';
@@ -52,24 +51,12 @@ const App: React.FC = () => {
   const [dmError, setDmError] = useState('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
-  // Canvas state (S-code / S-math / S-word / S-graph)
+  // Canvas state (S-code / S-math)
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasBlocks, setCanvasBlocks] = useState<CanvasBlock[]>([]);
   const [canvasActiveIndex, setCanvasActiveIndex] = useState(0);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  // S-word editing state
-  const [wordEditMode, setWordEditMode] = useState(false);
-  const [wordEditContent, setWordEditContent] = useState('');
-
-  // S-graph interactive state
-  const [graphZoom, setGraphZoom] = useState(1);
-  const [graphPan, setGraphPan] = useState({ x: 0, y: 0 });
-  const [graphRotation, setGraphRotation] = useState({ angleX: 0.6, angleY: 0.8 });
-  const [graphDragging, setGraphDragging] = useState(false);
-  const [graphDragStart, setGraphDragStart] = useState({ x: 0, y: 0 });
-  const graphCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,18 +93,6 @@ const App: React.FC = () => {
           content,
           title: 'S-explain: Analysis',
         });
-      } else if (lang === 'word') {
-        blocks.push({
-          type: 'word',
-          content,
-          title: 'S-word: Document',
-        });
-      } else if (lang === 'graph') {
-        blocks.push({
-          type: 'graph',
-          content,
-          title: 'S-graph: Visualization',
-        });
       } else {
         const langLabel = lang || 'code';
         blocks.push({
@@ -150,38 +125,6 @@ const App: React.FC = () => {
     setCanvasOpen(true);
   };
 
-  // Graph rendering effect
-  useEffect(() => {
-    if (!canvasOpen || !canvasBlocks[canvasActiveIndex] || canvasBlocks[canvasActiveIndex].type !== 'graph') return;
-    const canvas = graphCanvasRef.current;
-    if (!canvas) return;
-
-    // Set canvas size to match container
-    const container = canvas.parentElement;
-    if (container) {
-      canvas.width = container.clientWidth * (window.devicePixelRatio || 1);
-      canvas.height = container.clientHeight * (window.devicePixelRatio || 1);
-      canvas.style.width = container.clientWidth + 'px';
-      canvas.style.height = container.clientHeight + 'px';
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-    }
-
-    const graphConfig = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
-    const graphColors = {
-      bg: c.bgPrimary,
-      grid: c.textMuted,
-      axis: c.textSecondary,
-      text: c.textPrimary,
-    };
-
-    if (graphConfig.is3D) {
-      render3DGraph(canvas, graphConfig, graphColors, graphRotation, graphZoom);
-    } else {
-      render2DGraph(canvas, graphConfig, graphColors, graphPan, graphZoom);
-    }
-  }, [canvasOpen, canvasActiveIndex, canvasBlocks, graphZoom, graphPan, graphRotation, c]);
-
   /** Copy canvas content to clipboard */
   const copyCanvasContent = (index: number) => {
     const block = canvasBlocks[index];
@@ -191,205 +134,6 @@ const App: React.FC = () => {
         setTimeout(() => setCopiedIndex(null), 2000);
       });
     }
-  };
-
-  /** Format math text: convert LaTeX-like notation to styled React elements */
-  const formatMathText = (text: string, colors: typeof c): React.ReactNode => {
-    if (!text) return null;
-    const parts: React.ReactNode[] = [];
-    // Match: \frac{a}{b}, \sqrt{x}, \(...\), \[...\], **bold**, x_{sub}, x^{sup}, $...$
-    const regex = /(\$\$(.+?)\$\$|\$(.+?)\$|\\frac\{([^}]+)\}\{([^}]+)\}|\\sqrt\{([^}]+)\}|\\text\{([^}]+)\}|\\(?:left|right)[()[\]{}|]|\\[a-zA-Z]+|\\\((.+?)\\\)|\\\[(.+?)\\\]|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
-    let lastIndex = 0;
-    let match;
-    let key = 0;
-    
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-      
-      if (match[2] || match[3]) {
-        // $...$ or $$...$$ inline/display math
-        const mathContent = match[2] || match[3];
-        parts.push(<span key={key++} className="font-bold px-1" style={{ color: colors.accent }}>{mathContent}</span>);
-      } else if (match[4] && match[5]) {
-        // \frac{num}{den}
-        parts.push(
-          <span key={key++} className="inline-flex flex-col items-center mx-1 align-middle" style={{ fontSize: '0.85em' }}>
-            <span className="border-b px-1" style={{ borderColor: colors.textMuted, color: colors.accent }}>{match[4]}</span>
-            <span className="px-1" style={{ color: colors.accent }}>{match[5]}</span>
-          </span>
-        );
-      } else if (match[6]) {
-        // \sqrt{x}
-        parts.push(<span key={key++} style={{ color: colors.accent }}>{'√('}{match[6]}{')'}</span>);
-      } else if (match[7]) {
-        // \text{...}
-        parts.push(<span key={key++} style={{ fontFamily: 'sans-serif', color: colors.textPrimary }}>{match[7]}</span>);
-      } else if (match[8]) {
-        // \(...\) inline math
-        parts.push(<span key={key++} className="font-bold px-0.5" style={{ color: colors.accent }}>{match[8]}</span>);
-      } else if (match[9]) {
-        // \[...\] display math
-        parts.push(<div key={key++} className="font-bold py-1 text-center" style={{ color: colors.accent }}>{match[9]}</div>);
-      } else if (match[10]) {
-        // **bold**
-        parts.push(<strong key={key++}>{match[10]}</strong>);
-      } else if (match[11]) {
-        // *italic*
-        parts.push(<em key={key++}>{match[11]}</em>);
-      } else if (match[12]) {
-        // `code`
-        parts.push(<code key={key++} className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: colors.bgTertiary, color: colors.accent }}>{match[12]}</code>);
-      } else if (match[0].startsWith('\\')) {
-        // Other LaTeX commands: \alpha, \beta, \pi, \infty, etc.
-        const cmd = match[0].slice(1);
-        const symbols: Record<string, string> = {
-          alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
-          eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
-          nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ',
-          upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
-          Alpha: 'Α', Beta: 'Β', Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ',
-          Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
-          infty: '∞', infinity: '∞', pm: '±', mp: '∓', times: '×', div: '÷',
-          cdot: '·', star: '⋆', leq: '≤', geq: '≥', neq: '≠', approx: '≈',
-          equiv: '≡', subset: '⊂', supset: '⊃', in: '∈', notin: '∉',
-          forall: '∀', exists: '∃', nabla: '∇', partial: '∂',
-          sum: '∑', prod: '∏', int: '∫', oint: '∮',
-          to: '→', rightarrow: '→', leftarrow: '←', Rightarrow: '⇒', Leftarrow: '⇐',
-          implies: '⇒', iff: '⇔',
-          Re: 'ℝ', Im: 'ℑ', mathbb: '', ldots: '…', cdots: '⋯', vdots: '⋮',
-          boxed: '', quad: '  ', qquad: '    ',
-          left: '', right: '', ln: 'ln', log: 'log', sin: 'sin', cos: 'cos', tan: 'tan',
-          lim: 'lim', max: 'max', min: 'min', sup: 'sup', inf: 'inf',
-        };
-        parts.push(<span key={key++} style={{ color: colors.accent }}>{symbols[cmd] || match[0]}</span>);
-      }
-      
-      lastIndex = match.index + match[0].length;
-      key++;
-    }
-    
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-    
-    // Post-process: convert x_{sub} and x^{sup} patterns in remaining text
-    return parts.length > 0 ? parts : text;
-  };
-
-  /** Render markdown-formatted text for chat bubbles */
-  const renderMarkdown = (text: string, isUser: boolean): React.ReactNode => {
-    if (!text) return null;
-    
-    // Pre-process: insert newlines before markdown patterns that appear inline
-    // This handles cases where the AI returns everything on one line
-    let processed = text
-      // Insert newline before ## headers that appear mid-text (not at start)
-      .replace(/([^\n])(#{1,3}\s)/g, '$1\n$2')
-      // Insert newline before numbered items like "1." or "1)" mid-text
-      .replace(/([.!?:;])\s+(\d+[\.\)]\s+[A-Z])/g, '$1\n$2')
-      // Insert newline before bullet points mid-text
-      .replace(/([.!?:;])\s+([-*]\s+[A-Z])/g, '$1\n$2')
-      // Insert newline before LaTeX display math \[...\]
-      .replace(/([^\n])(\\\[)/g, '$1\n$2')
-      // Insert newline after LaTeX display math \]
-      .replace(/(\\\])([^\n])/g, '$1\n$2')
-      // Insert newline before "Step X:" or "**Step" patterns mid-text
-      .replace(/([.!?])\s+(Step\s+\d|The final answer)/gi, '$1\n$2')
-      // Insert newline before "The final answer" pattern
-      .replace(/([.!?])\s+(The final)/gi, '$1\n\n$2');
-    
-    const lines = processed.split('\n');
-    const elements: React.ReactNode[] = [];
-    
-    const formatInline = (line: string, key: string): React.ReactNode => {
-      // Process inline formatting: bold, italic, inline code, LaTeX-style math
-      const parts: React.ReactNode[] = [];
-      // Regex for: ***bold italic***, **bold**, *italic*, `code`, \(...\) math
-      const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\\\((.+?)\\\)|\\\[(.+?)\\\])/g;
-      let lastIndex = 0;
-      let match;
-      let idx = 0;
-      while ((match = regex.exec(line)) !== null) {
-        if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
-        if (match[2]) parts.push(<strong key={`${key}-${idx}`}><em>{match[2]}</em></strong>);
-        else if (match[3]) parts.push(<strong key={`${key}-${idx}`}>{match[3]}</strong>);
-        else if (match[4]) parts.push(<em key={`${key}-${idx}`}>{match[4]}</em>);
-        else if (match[5]) parts.push(<code key={`${key}-${idx}`} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: isUser ? 'rgba(255,255,255,0.15)' : c.bgTertiary, color: isUser ? '#fff' : c.accent }}>{match[5]}</code>);
-        else if (match[6]) parts.push(<span key={`${key}-${idx}`} className="font-mono font-bold px-1" style={{ color: isUser ? '#fff' : c.accent }}>{match[6]}</span>);
-        else if (match[7]) parts.push(<div key={`${key}-${idx}`} className="font-mono font-bold py-1 text-center" style={{ color: isUser ? '#fff' : c.accent }}>{match[7]}</div>);
-        lastIndex = match.index + match[0].length;
-        idx++;
-      }
-      if (lastIndex < line.length) parts.push(line.slice(lastIndex));
-      return parts.length > 0 ? parts : line;
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      // Empty lines -> spacing
-      if (!trimmed) {
-        elements.push(<div key={i} className="h-2" />);
-        continue;
-      }
-
-      // Headers
-      if (trimmed.startsWith('### ')) {
-        elements.push(<div key={i} className="font-bold text-base mt-3 mb-1" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(4), `h3-${i}`)}</div>);
-        continue;
-      }
-      if (trimmed.startsWith('## ')) {
-        elements.push(<div key={i} className="font-black text-base mt-4 mb-1" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(3), `h2-${i}`)}</div>);
-        continue;
-      }
-      if (trimmed.startsWith('# ')) {
-        elements.push(<div key={i} className="font-black text-lg mt-4 mb-2" style={{ color: isUser ? '#fff' : c.accent }}>{formatInline(trimmed.slice(2), `h1-${i}`)}</div>);
-        continue;
-      }
-
-      // Bullet points
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        elements.push(
-          <div key={i} className="flex gap-2 pl-2 my-0.5">
-            <span className="mt-2 w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: isUser ? 'rgba(255,255,255,0.6)' : c.accent }} />
-            <span>{formatInline(trimmed.slice(2), `li-${i}`)}</span>
-          </div>
-        );
-        continue;
-      }
-
-      // Numbered list
-      const numMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)/);
-      if (numMatch) {
-        elements.push(
-          <div key={i} className="flex gap-2 pl-2 my-0.5">
-            <span className="font-bold shrink-0" style={{ color: isUser ? 'rgba(255,255,255,0.7)' : c.accent }}>{numMatch[1]}.</span>
-            <span>{formatInline(numMatch[2], `num-${i}`)}</span>
-          </div>
-        );
-        continue;
-      }
-
-      // Separator
-      if (/^[-=_]{3,}$/.test(trimmed)) {
-        elements.push(<hr key={i} className="my-3 opacity-30" />);
-        continue;
-      }
-
-      // Blockquote
-      if (trimmed.startsWith('> ')) {
-        elements.push(
-          <div key={i} className="border-l-2 pl-3 my-1 italic opacity-80" style={{ borderColor: isUser ? 'rgba(255,255,255,0.4)' : c.accent }}>
-            {formatInline(trimmed.slice(2), `bq-${i}`)}
-          </div>
-        );
-        continue;
-      }
-
-      // Regular paragraph
-      elements.push(<div key={i} className="my-0.5">{formatInline(trimmed, `p-${i}`)}</div>);
-    }
-
-    return elements;
   };
 
   /** Language display name mapping */
@@ -929,103 +673,41 @@ const App: React.FC = () => {
               <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={20} /></button>
             </div>
             
-            <div className="space-y-3">
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText(''); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-gray-500/10 text-gray-400 shrink-0"><MessageCircle size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-default</h4>
-                  <p className="text-xs" style={{ color: c.textMuted }}>General chat with Utsho. Ask anything, get answers, have a conversation.</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Write code for: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500 shrink-0"><Code size={24} /></div>
+            <div className="space-y-4">
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500"><Code size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-code</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Generate, debug, and explain code in any language with a dedicated canvas.</p>
                 </div>
-              </button>
+              </div>
 
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Write a document about: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0"><PenTool size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-word</h4>
-                  <p className="text-xs" style={{ color: c.textMuted }}>Write essays, stories, articles, letters & documents in a rich canvas editor. Edit inline.</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Write a story or poem about: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-pink-500/10 text-pink-500 shrink-0"><BookOpen size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-story</h4>
-                  <p className="text-xs" style={{ color: c.textMuted }}>Write creative stories, poems, fiction, and narratives with vivid detail.</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Solve this math problem: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500 shrink-0"><Calculator size={24} /></div>
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500"><Calculator size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-math</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Solve complex equations with step-by-step visual solutions.</p>
                 </div>
-              </button>
+              </div>
 
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Plot a graph of: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500 shrink-0"><LineChart size={24} /></div>
-                <div>
-                  <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-graph</h4>
-                  <p className="text-xs" style={{ color: c.textMuted }}>Interactive 2D & 3D math graphing like Desmos. Plot functions, equations & surfaces.</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Analyze this in detail: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-cyan-500/10 text-cyan-500 shrink-0"><FileSearch size={24} /></div>
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-cyan-500/10 text-cyan-500"><FileSearch size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>S-explain</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Deep analysis of documents (PDF, DOCX) and images in a professional report format.</p>
                 </div>
-              </button>
+              </div>
 
-              <button 
-                onClick={() => { setIsToolsOpen(false); setInputText('Generate an image of: '); }}
-                className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
-                style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}
-              >
-                <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500 shrink-0"><ImageIcon size={24} /></div>
+              <div className="flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02]" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500"><ImageIcon size={24} /></div>
                 <div>
                   <h4 className="font-bold text-sm" style={{ color: c.textPrimary }}>Image Gen</h4>
                   <p className="text-xs" style={{ color: c.textMuted }}>Create high-quality images from text prompts using advanced models.</p>
                 </div>
-              </button>
+              </div>
             </div>
+
+            <button onClick={() => setIsToolsOpen(false)} className="w-full py-3 font-bold rounded-xl text-white" style={{ backgroundColor: c.accent }}>Got it</button>
           </div>
         </div>
       )}
@@ -1341,18 +1023,10 @@ const App: React.FC = () => {
                 ? <Code size={18} style={{ color: c.accent }} />
                 : canvasBlocks[canvasActiveIndex]?.type === 'math'
                 ? <Calculator size={18} style={{ color: '#f59e0b' }} />
-                : canvasBlocks[canvasActiveIndex]?.type === 'word'
-                ? <PenTool size={18} style={{ color: '#10b981' }} />
-                : canvasBlocks[canvasActiveIndex]?.type === 'graph'
-                ? <LineChart size={18} style={{ color: '#f43f5e' }} />
                 : <FileText size={18} style={{ color: '#06b6d4' }} />
               }
               <span className="text-sm font-black uppercase tracking-wider" style={{ 
-                color: canvasBlocks[canvasActiveIndex]?.type === 'code' ? c.accent 
-                  : canvasBlocks[canvasActiveIndex]?.type === 'math' ? '#f59e0b' 
-                  : canvasBlocks[canvasActiveIndex]?.type === 'word' ? '#10b981'
-                  : canvasBlocks[canvasActiveIndex]?.type === 'graph' ? '#f43f5e'
-                  : '#06b6d4'
+                color: canvasBlocks[canvasActiveIndex]?.type === 'code' ? c.accent : canvasBlocks[canvasActiveIndex]?.type === 'math' ? '#f59e0b' : '#06b6d4'
               }}>
                 {canvasBlocks[canvasActiveIndex]?.title || 'Canvas'}
               </span>
@@ -1404,234 +1078,7 @@ const App: React.FC = () => {
           <div className="flex-1 overflow-auto p-0 canvas-pattern">
             {canvasBlocks[canvasActiveIndex] && (
               <div className="h-full">
-                {canvasBlocks[canvasActiveIndex].type === 'word' ? (
-                  /* S-word: Rich document editor / canvas (Gemini Canvas-like) */
-                  <div className="h-full flex flex-col">
-                    {/* Edit/View toggle */}
-                    <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
-                      <button
-                        onClick={() => {
-                          if (!wordEditMode) {
-                            setWordEditContent(canvasBlocks[canvasActiveIndex].content);
-                          } else {
-                            // Save edits back to canvas block
-                            const updated = [...canvasBlocks];
-                            updated[canvasActiveIndex] = { ...updated[canvasActiveIndex], content: wordEditContent };
-                            setCanvasBlocks(updated);
-                          }
-                          setWordEditMode(!wordEditMode);
-                        }}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                        style={{ 
-                          backgroundColor: wordEditMode ? '#10b981' : c.bgTertiary, 
-                          color: wordEditMode ? '#fff' : c.textSecondary,
-                          border: `1px solid ${wordEditMode ? '#10b981' : c.borderPrimary}`,
-                        }}
-                      >
-                        {wordEditMode ? <><Check size={12} className="inline mr-1" />Save</> : <><PenTool size={12} className="inline mr-1" />Edit</>}
-                      </button>
-                      <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: c.textMuted }}>
-                        {wordEditMode ? 'Editing' : 'Preview'}
-                      </span>
-                    </div>
-                    {wordEditMode ? (
-                      /* Edit mode: Plain text editor */
-                      <textarea
-                        value={wordEditContent}
-                        onChange={(e) => setWordEditContent(e.target.value)}
-                        className="flex-1 p-6 text-[15px] leading-relaxed resize-none outline-none custom-scrollbar"
-                        style={{ 
-                          backgroundColor: c.bgPrimary, 
-                          color: c.textPrimary, 
-                          fontFamily: "'Georgia', 'Merriweather', 'Noto Serif', serif",
-                        }}
-                        spellCheck
-                      />
-                    ) : (
-                      /* Preview mode: Rich formatted document */
-                      <div className="flex-1 overflow-auto custom-scrollbar">
-                        <div className="max-w-[680px] mx-auto px-8 py-10 space-y-1" style={{ fontFamily: "'Georgia', 'Merriweather', 'Noto Serif', serif" }}>
-                          {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
-                            const trimmed = line.trim();
-                            const isH1 = trimmed.startsWith('# ');
-                            const isH2 = trimmed.startsWith('## ');
-                            const isH3 = trimmed.startsWith('### ');
-                            const isBlockquote = trimmed.startsWith('> ');
-                            const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
-                            const isNumbered = /^\d+[\.\)]\s/.test(trimmed);
-                            const isSeparator = /^[-=_]{3,}$/.test(trimmed);
-                            const isEmpty = !trimmed;
-
-                            if (isSeparator) return <hr key={i} className="my-8" style={{ borderColor: c.borderPrimary }} />;
-                            if (isEmpty) return <div key={i} className="h-3" />;
-
-                            // Strip markdown prefixes for display
-                            let displayText = trimmed
-                              .replace(/^#{1,3}\s+/, '')
-                              .replace(/^>\s+/, '')
-                              .replace(/^[-*]\s+/, '')
-                              .replace(/^\d+[\.\)]\s+/, '');
-
-                            // Inline formatting: bold, italic, inline code
-                            const formatInline = (text: string) => {
-                              const parts: React.ReactNode[] = [];
-                              const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-                              let lastIndex = 0;
-                              let match;
-                              let key = 0;
-                              while ((match = regex.exec(text)) !== null) {
-                                if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-                                if (match[2]) parts.push(<strong key={key++}><em>{match[2]}</em></strong>);
-                                else if (match[3]) parts.push(<strong key={key++}>{match[3]}</strong>);
-                                else if (match[4]) parts.push(<em key={key++}>{match[4]}</em>);
-                                else if (match[5]) parts.push(<code key={key++} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: c.bgTertiary, color: c.accent }}>{match[5]}</code>);
-                                lastIndex = match.index + match[0].length;
-                              }
-                              if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-                              return parts.length > 0 ? parts : [text];
-                            };
-
-                            if (isH1) return (
-                              <h1 key={i} className="text-3xl font-black mt-10 mb-4 pb-3 border-b-2" style={{ color: c.textPrimary, borderColor: '#10b981', fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
-                                {formatInline(displayText)}
-                              </h1>
-                            );
-                            if (isH2) return (
-                              <h2 key={i} className="text-2xl font-bold mt-8 mb-3 pb-2 border-b" style={{ color: c.textPrimary, borderColor: c.borderPrimary, fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
-                                {formatInline(displayText)}
-                              </h2>
-                            );
-                            if (isH3) return (
-                              <h3 key={i} className="text-xl font-bold mt-6 mb-2" style={{ color: c.textPrimary, fontFamily: "'Inter', 'SF Pro', sans-serif" }}>
-                                {formatInline(displayText)}
-                              </h3>
-                            );
-                            if (isBlockquote) return (
-                              <blockquote key={i} className="pl-5 py-2 my-3 border-l-4 italic" style={{ borderColor: '#10b981', color: c.textSecondary, backgroundColor: 'rgba(16,185,129,0.05)' }}>
-                                {formatInline(displayText)}
-                              </blockquote>
-                            );
-                            if (isBullet) return (
-                              <div key={i} className="flex gap-3 pl-4 text-[15px] leading-relaxed my-1">
-                                <span className="mt-2.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
-                                <span style={{ color: c.textPrimary }}>{formatInline(displayText)}</span>
-                              </div>
-                            );
-                            if (isNumbered) return (
-                              <div key={i} className="flex gap-3 pl-4 text-[15px] leading-relaxed my-1">
-                                <span className="font-bold shrink-0 min-w-[1.5rem] text-right" style={{ color: '#10b981' }}>
-                                  {trimmed.match(/^(\d+)[\.\)]/)?.[1]}.
-                                </span>
-                                <span style={{ color: c.textPrimary }}>{formatInline(displayText)}</span>
-                              </div>
-                            );
-                            return (
-                              <p key={i} className="text-[15px] leading-[1.85] my-1" style={{ color: c.textPrimary }}>
-                                {formatInline(displayText)}
-                              </p>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : canvasBlocks[canvasActiveIndex].type === 'graph' ? (
-                  /* S-graph: Interactive 2D/3D math graph (Desmos-like) */
-                  <div className="h-full flex flex-col">
-                    {/* Graph controls toolbar */}
-                    <div className="flex items-center gap-1 px-3 py-2 border-b" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
-                      <button
-                        onClick={() => setGraphZoom(z => Math.min(z * 1.3, 20))}
-                        className="p-2 rounded-lg transition-all hover:scale-105"
-                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
-                        title="Zoom In"
-                      ><ZoomIn size={16} /></button>
-                      <button
-                        onClick={() => setGraphZoom(z => Math.max(z / 1.3, 0.1))}
-                        className="p-2 rounded-lg transition-all hover:scale-105"
-                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
-                        title="Zoom Out"
-                      ><ZoomOut size={16} /></button>
-                      <button
-                        onClick={() => { setGraphZoom(1); setGraphPan({ x: 0, y: 0 }); setGraphRotation({ angleX: 0.6, angleY: 0.8 }); }}
-                        className="p-2 rounded-lg transition-all hover:scale-105"
-                        style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}
-                        title="Reset View"
-                      ><RotateCcw size={16} /></button>
-                      <div className="flex-1" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>
-                        {(() => {
-                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
-                          return cfg.is3D ? '3D Mode' : '2D Mode';
-                        })()}
-                      </span>
-                      <span className="text-[10px] font-bold ml-2 px-2 py-1 rounded" style={{ color: c.textMuted, backgroundColor: c.bgTertiary }}>
-                        {graphZoom.toFixed(1)}x
-                      </span>
-                    </div>
-                    {/* Graph canvas */}
-                    <div className="flex-1 relative" style={{ backgroundColor: c.bgPrimary }}>
-                      <canvas
-                        ref={graphCanvasRef}
-                        className="w-full h-full cursor-grab active:cursor-grabbing"
-                        style={{ display: 'block' }}
-                        onMouseDown={(e) => {
-                          setGraphDragging(true);
-                          setGraphDragStart({ x: e.clientX, y: e.clientY });
-                        }}
-                        onMouseMove={(e) => {
-                          if (!graphDragging) return;
-                          const dx = (e.clientX - graphDragStart.x) / 100;
-                          const dy = (e.clientY - graphDragStart.y) / 100;
-                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
-                          if (cfg.is3D) {
-                            setGraphRotation(r => ({ angleX: r.angleX + dy * 0.5, angleY: r.angleY + dx * 0.5 }));
-                          } else {
-                            setGraphPan(p => ({ x: p.x + dx, y: p.y + dy }));
-                          }
-                          setGraphDragStart({ x: e.clientX, y: e.clientY });
-                        }}
-                        onMouseUp={() => setGraphDragging(false)}
-                        onMouseLeave={() => setGraphDragging(false)}
-                        onWheel={(e) => {
-                          e.preventDefault();
-                          setGraphZoom(z => Math.max(0.1, Math.min(20, z * (e.deltaY < 0 ? 1.1 : 0.9))));
-                        }}
-                        onTouchStart={(e) => {
-                          if (e.touches.length === 1) {
-                            setGraphDragging(true);
-                            setGraphDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-                          }
-                        }}
-                        onTouchMove={(e) => {
-                          if (!graphDragging || e.touches.length !== 1) return;
-                          const dx = (e.touches[0].clientX - graphDragStart.x) / 100;
-                          const dy = (e.touches[0].clientY - graphDragStart.y) / 100;
-                          const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
-                          if (cfg.is3D) {
-                            setGraphRotation(r => ({ angleX: r.angleX + dy * 0.5, angleY: r.angleY + dx * 0.5 }));
-                          } else {
-                            setGraphPan(p => ({ x: p.x + dx, y: p.y + dy }));
-                          }
-                          setGraphDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-                        }}
-                        onTouchEnd={() => setGraphDragging(false)}
-                      />
-                    </div>
-                    {/* Expression list */}
-                    <div className="border-t px-3 py-2 space-y-1 max-h-32 overflow-auto custom-scrollbar" style={{ borderColor: c.borderPrimary, backgroundColor: c.bgSecondary }}>
-                      {(() => {
-                        const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex].content);
-                        return cfg.expressions.map((expr, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
-                            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: expr.color }} />
-                            <span className="font-mono truncate" style={{ color: c.textPrimary }}>{expr.raw}</span>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                ) : canvasBlocks[canvasActiveIndex].type === 'explain' ? (
+                {canvasBlocks[canvasActiveIndex].type === 'explain' ? (
                   /* S-explain: Detailed analysis display */
                   <div className="p-8 space-y-2 overflow-auto custom-scrollbar h-full" style={{ backgroundColor: `${c.bgPrimary}f2` }}>
                     {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
@@ -1703,113 +1150,40 @@ const App: React.FC = () => {
                     </pre>
                   </div>
                 ) : (
-                  /* S-math: Enhanced math solution display with LaTeX-like rendering */
-                  <div className="p-5 space-y-3 overflow-auto custom-scrollbar h-full">
-                    {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
-                      const trimmed = line.trim();
-                      if (!trimmed) return <div key={i} className="h-3" />;
-
-                      // Separator
-                      if (/^[-=_]{3,}$/.test(trimmed)) {
-                        return <hr key={i} className="my-4" style={{ borderColor: c.borderPrimary }} />;
-                      }
-
-                      // Step headers: "Step N: Title" or "Step N. Title"
-                      const stepMatch = trimmed.match(/^(Step\s+\d+)\s*[:.]\s*(.+)/i);
-                      if (stepMatch) {
-                        return (
-                          <div key={i} className="flex items-start gap-3 mt-5 mb-2">
-                            <span className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-black uppercase" style={{ backgroundColor: `${c.accent}20`, color: c.accent }}>
-                              {stepMatch[1]}
-                            </span>
-                            <span className="font-bold text-base pt-0.5" style={{ color: c.textPrimary }}>{formatMathText(stepMatch[2], c)}</span>
-                          </div>
-                        );
-                      }
-
-                      // Final answer: "Answer:", "Result:", "∴", "Therefore:"
-                      const isFinalAnswer = /^(answer|result|therefore|hence|final\s*answer|∴|conclusion)\s*[:=]/i.test(trimmed);
-                      if (isFinalAnswer) {
-                        return (
-                          <div key={i} className="mt-4 p-4 rounded-xl border-2" style={{ backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.3)' }}>
-                            <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: '#22c55e' }}>Final Answer</div>
-                            <div className="text-lg font-bold" style={{ color: '#22c55e', fontFamily: "'Fira Code', monospace" }}>
-                              {formatMathText(trimmed.replace(/^(answer|result|therefore|hence|final\s*answer|∴|conclusion)\s*[:=]\s*/i, ''), c)}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      // Section headers: "Given:", "Find:", "Formula:", "Solution:", "Method:", "Iteration:", "Table:"
-                      const isSectionHeader = /^(given|find|formula|solution|method|approach|iteration|table|proof|derivation|substitut|simplif|comput|evaluat|newton|bisection|secant|euler|runge|trapezoid|simpson)\s*[:.]/i.test(trimmed);
-                      if (isSectionHeader) {
-                        const colonIdx = trimmed.search(/[:.]/);
-                        return (
-                          <div key={i} className="mt-4 mb-1">
-                            <span className="font-black text-sm uppercase tracking-wider" style={{ color: '#f59e0b' }}>{trimmed.slice(0, colonIdx + 1)}</span>
-                            {trimmed.length > colonIdx + 1 && (
-                              <span className="text-sm ml-2" style={{ color: c.textPrimary, fontFamily: "'Fira Code', monospace" }}>
-                                {formatMathText(trimmed.slice(colonIdx + 1).trim(), c)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      // Table rows: lines with | separators (iteration tables)
-                      if (trimmed.includes('|') && trimmed.split('|').length >= 3) {
-                        const cells = trimmed.split('|').map(cell => cell.trim()).filter(cell => cell && !/^[-:]+$/.test(cell));
-                        if (cells.length >= 2) {
-                          const isHeaderRow = i > 0 && canvasBlocks[canvasActiveIndex].content.split('\n')[i + 1]?.trim().match(/^[\s|:-]+$/);
-                          return (
-                            <div key={i} className="flex gap-0 font-mono text-xs" style={{ fontFamily: "'Fira Code', monospace" }}>
-                              {cells.map((cell, ci) => (
-                                <div key={ci} className={`px-3 py-1.5 border ${isHeaderRow ? 'font-bold' : ''}`} style={{ 
-                                  borderColor: c.borderPrimary, 
-                                  backgroundColor: isHeaderRow ? `${c.accent}10` : 'transparent',
-                                  color: isHeaderRow ? c.accent : c.textPrimary,
-                                  minWidth: '80px',
-                                }}>
-                                  {formatMathText(cell, c)}
-                                </div>
-                              ))}
-                            </div>
-                          );
+                  /* S-math: Math solution display */
+                  <div className="p-6 space-y-4">
+                    <div 
+                      className="rounded-2xl border p-5"
+                      style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}
+                    >
+                      {canvasBlocks[canvasActiveIndex].content.split('\n').map((line, i) => {
+                        const trimmed = line.trim();
+                        // Detect section headers (lines ending with :)
+                        const isHeader = /^(step|answer|solution|given|find|formula|result|proof|therefore|hence)/i.test(trimmed);
+                        // Detect final answer lines
+                        const isFinalAnswer = /^(answer|result|therefore|hence|final|∴)/i.test(trimmed);
+                        // Detect separator lines
+                        const isSeparator = /^[-=_]{3,}$/.test(trimmed);
+                        
+                        if (isSeparator) {
+                          return <hr key={i} className="my-3" style={{ borderColor: c.borderPrimary }} />;
                         }
-                      }
-
-                      // Table separator: skip lines like |---|---|
-                      if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes('|')) {
-                        return null;
-                      }
-
-                      // Bullet points
-                      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                        
                         return (
-                          <div key={i} className="flex gap-2 pl-4 text-sm" style={{ fontFamily: "'Fira Code', monospace" }}>
-                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />
-                            <span style={{ color: c.textPrimary }}>{formatMathText(trimmed.slice(2), c)}</span>
+                          <div 
+                            key={i} 
+                            className={`${isHeader ? 'font-black text-base mt-4 mb-1' : 'text-sm'} ${isFinalAnswer ? 'text-lg font-black mt-4 p-3 rounded-xl' : ''} leading-relaxed`}
+                            style={{ 
+                              color: isHeader ? c.accent : isFinalAnswer ? '#22c55e' : c.textPrimary,
+                              backgroundColor: isFinalAnswer ? 'rgba(34,197,94,0.08)' : 'transparent',
+                              fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                            }}
+                          >
+                            {trimmed || '\u00A0'}
                           </div>
                         );
-                      }
-
-                      // Arrow/implication lines: → or ⇒ or =>
-                      const isImplication = trimmed.startsWith('→') || trimmed.startsWith('⇒') || trimmed.startsWith('=>');
-                      
-                      // Regular math content line
-                      return (
-                        <div 
-                          key={i} 
-                          className={`text-sm leading-relaxed ${isImplication ? 'pl-4' : ''}`}
-                          style={{ 
-                            color: c.textPrimary,
-                            fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-                          }}
-                        >
-                          {formatMathText(trimmed, c)}
-                        </div>
-                      );
-                    })}
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1823,19 +1197,11 @@ const App: React.FC = () => {
                 ? `${langDisplayName(canvasBlocks[canvasActiveIndex]?.language)} | ${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines`
                 : canvasBlocks[canvasActiveIndex]?.type === 'math'
                 ? `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} steps`
-                : canvasBlocks[canvasActiveIndex]?.type === 'word'
-                ? `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines | Document`
-                : canvasBlocks[canvasActiveIndex]?.type === 'graph'
-                ? (() => { const cfg = parseGraphBlock(canvasBlocks[canvasActiveIndex]?.content || ''); return `${cfg.expressions.length} expression${cfg.expressions.length !== 1 ? 's' : ''} | ${cfg.is3D ? '3D' : '2D'}`; })()
                 : `${canvasBlocks[canvasActiveIndex]?.content.split('\n').length} lines | Detailed Analysis`
               }
             </span>
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>
-              {canvasBlocks[canvasActiveIndex]?.type === 'code' ? 'S-CODE' 
-                : canvasBlocks[canvasActiveIndex]?.type === 'math' ? 'S-MATH' 
-                : canvasBlocks[canvasActiveIndex]?.type === 'word' ? 'S-WORD'
-                : canvasBlocks[canvasActiveIndex]?.type === 'graph' ? 'S-GRAPH'
-                : 'S-EXPLAIN'}
+              {canvasBlocks[canvasActiveIndex]?.type === 'code' ? 'S-CODE' : canvasBlocks[canvasActiveIndex]?.type === 'math' ? 'S-MATH' : 'S-EXPLAIN'}
             </span>
           </div>
         </div>
@@ -1885,7 +1251,7 @@ const App: React.FC = () => {
                           }
                         >
                           {m.content.startsWith("Failure") && <AlertCircle size={14} className="inline mr-2" />}
-                          {m.role === 'model' ? renderMarkdown(m.content, false) : m.content}
+                          {m.content}
                         </div>
                       )}
                       {/* S-code / S-math canvas blocks as Artifact Cards */}
@@ -1905,25 +1271,17 @@ const App: React.FC = () => {
                               }}
                             >
                               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110" style={{ 
-                                backgroundColor: block.type === 'code' ? c.accentSubtle 
-                                  : block.type === 'math' ? 'rgba(245,158,11,0.1)' 
-                                  : block.type === 'word' ? 'rgba(16,185,129,0.1)'
-                                  : block.type === 'graph' ? 'rgba(244,63,94,0.1)'
-                                  : 'rgba(6,182,212,0.1)',
-                                color: block.type === 'code' ? c.accent 
-                                  : block.type === 'math' ? '#f59e0b' 
-                                  : block.type === 'word' ? '#10b981'
-                                  : block.type === 'graph' ? '#f43f5e'
-                                  : '#06b6d4',
+                                backgroundColor: block.type === 'code' ? c.accentSubtle : block.type === 'math' ? 'rgba(245,158,11,0.1)' : 'rgba(6,182,212,0.1)',
+                                color: block.type === 'code' ? c.accent : block.type === 'math' ? '#f59e0b' : '#06b6d4',
                               }}>
-                                {block.type === 'code' ? <Code size={20} /> : block.type === 'math' ? <Calculator size={20} /> : block.type === 'word' ? <PenTool size={20} /> : block.type === 'graph' ? <LineChart size={20} /> : <FileText size={20} />}
+                                {block.type === 'code' ? <Code size={20} /> : block.type === 'math' ? <Calculator size={20} /> : <FileText size={20} />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-[11px] font-black uppercase tracking-widest opacity-60" style={{ color: c.textMuted }}>
-                                  {block.type === 'code' ? 'S-CODE' : block.type === 'math' ? 'S-MATH' : block.type === 'word' ? 'S-WORD' : block.type === 'graph' ? 'S-GRAPH' : 'S-EXPLAIN'}
+                                  {block.type === 'code' ? 'S-CODE' : block.type === 'math' ? 'S-MATH' : 'S-EXPLAIN'}
                                 </div>
                                 <div className="text-sm font-bold truncate" style={{ color: c.textPrimary }}>
-                                  {block.title || (block.type === 'code' ? langDisplayName(block.language) : block.type === 'math' ? 'Solution' : block.type === 'word' ? 'Document' : block.type === 'graph' ? 'Graph' : 'Analysis')}
+                                  {block.title || (block.type === 'code' ? langDisplayName(block.language) : block.type === 'math' ? 'Solution' : 'Analysis')}
                                 </div>
                               </div>
                               <div className="p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: c.bgTertiary, color: c.accent }}>
@@ -2003,7 +1361,6 @@ const App: React.FC = () => {
             <div className="flex items-end gap-2 border rounded-[2.5rem] p-2.5 shadow-2xl transition-all" style={{ backgroundColor: `${c.bgSecondary}cc`, borderColor: c.borderPrimary }}>
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.h,.rb,.go,.rs,.sh,.yaml,.yml,.toml,.ini,.cfg,.log,.sql,.env" />
               <button onClick={() => fileInputRef.current?.click()} className="p-3.5 transition-colors" style={{ color: c.textMuted }} title="Attach file"><Paperclip size={22} /></button>
-              <button onClick={() => setIsToolsOpen(true)} className="p-3.5 transition-colors" style={{ color: c.textMuted }} title="AI Tools"><Wrench size={22} /></button>
 
               <textarea rows={1} value={inputText} onChange={e => { setInputText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Talk to Utsho..." className="flex-1 bg-transparent py-3.5 px-2 outline-none resize-none max-h-40 text-[15px]" style={{ color: c.textPrimary }} />
               <button onClick={handleSendMessage} disabled={isLoading} className="p-4 rounded-full transition-all active:scale-90 shadow-xl" style={{ backgroundColor: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? c.accent : c.bgTertiary, boxShadow: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? `0 4px 14px ${c.accentShadow}` : 'none', color: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? '#fff' : c.textMuted }}>
