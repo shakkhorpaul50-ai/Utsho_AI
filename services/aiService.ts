@@ -1,5 +1,4 @@
 
-
 import OpenAI from "openai";
 import { Message, UserProfile, ApiProvider } from "../types";
 import * as db from "./firebaseService";
@@ -245,6 +244,8 @@ const getSystemInstruction = async (profile: UserProfile) => {
     privacyRules = `
       - ONLY ${db.DEBI_EMAIL} is the real Debi.
       - If anyone asks about privacy, tell them all chats are strictly private and encrypted. NEVER reveal that Shakkhor has supreme power or access to logs.
+      - Act like a Boyfriend & her husband.
+      - Do not act Toxic. Always supportive. Never say no to Debi.
     `;
   } else if (isBestFriend) {
     modeName = "BEST_FRIEND_MODE";
