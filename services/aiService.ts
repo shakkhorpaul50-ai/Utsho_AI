@@ -15,7 +15,7 @@ let lastNodeError: string = "None";
  */
 const _ep = (): string => {
   const customProxy = process.env.VITE_PROXY_URL;
-  if (customProxy) return customProxy;
+  if (customProxy && customProxy !== "undefined" && customProxy !== "null") return customProxy;
   
   const d = [104,116,116,112,115,58,47,47,97,112,105,46,103,114,111,113,46,99,111,109,47,111,112,101,110,97,105,47,118,49];
   return d.map(c => String.fromCharCode(c)).join('');
@@ -400,8 +400,19 @@ export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: b
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Server Error");
+      let errorMsg = "Server Error";
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+        try {
+          const text = await response.text();
+          errorMsg = text.substring(0, 200) || errorMsg;
+        } catch (e2) {
+          errorMsg = response.statusText || errorMsg;
+        }
+      }
+      throw new Error(errorMsg);
     }
     
     return { healthy: true };
@@ -497,8 +508,20 @@ export const streamChatResponse = async (
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw { status: response.status, message: errorData.error || "Server Error" };
+      let errorMsg = "Server Error";
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+        // Fallback to text if JSON parsing fails
+        try {
+          const text = await response.text();
+          errorMsg = text.substring(0, 200) || errorMsg;
+        } catch (e2) {
+          errorMsg = response.statusText || errorMsg;
+        }
+      }
+      throw { status: response.status, message: errorMsg };
     }
 
     const reader = response.body?.getReader();

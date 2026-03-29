@@ -18,14 +18,21 @@ async function startServer() {
   app.post("/api/chat", async (req, res) => {
     const { messages, model, apiKey, baseURL, max_tokens } = req.body;
 
+    const effectiveBaseURL = (baseURL && baseURL !== "undefined" && baseURL !== "null") 
+      ? baseURL 
+      : "https://api.groq.com/openai/v1";
+
+    console.log(`[SERVER] Chat request: model=${model}, baseURL=${effectiveBaseURL}`);
+
     if (!apiKey) {
+      console.error("[SERVER] Error: No API key provided");
       return res.status(401).json({ error: "No API key provided" });
     }
 
     try {
       const client = new OpenAI({ 
         apiKey, 
-        baseURL: baseURL || "https://api.groq.com/openai/v1",
+        baseURL: effectiveBaseURL,
       });
 
       const stream = await client.chat.completions.create({
@@ -49,9 +56,19 @@ async function startServer() {
       res.write("data: [DONE]\n\n");
       res.end();
     } catch (error: any) {
-      console.error("SERVER_CHAT_ERROR:", error);
-      const status = error.status || 500;
-      res.status(status).json({ error: error.message || "Internal Server Error" });
+      console.error("[SERVER] Chat error:", error);
+      
+      // If headers were already sent, we can't send a JSON error response
+      if (res.headersSent) {
+        console.error("[SERVER] Headers already sent, closing connection");
+        res.end();
+        return;
+      }
+
+      const status = typeof error.status === 'number' ? error.status : 500;
+      const message = error.message || "Internal Server Error";
+      
+      res.status(status).json({ error: message });
     }
   });
 
