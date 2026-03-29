@@ -3,6 +3,7 @@ import { Message, UserProfile, ApiProvider } from "../types";
 import * as db from "./firebaseService";
 import { getUserContext, formatContextForPrompt } from "./userLearningService";
 import { formatForSystemPrompt as getAdminContext } from "./adminCommandService";
+import OpenAI from "openai";
 
 // Key -> Expiry Timestamp
 const keyBlacklist = new Map<string, number>();
@@ -14,7 +15,7 @@ let lastNodeError: string = "None";
  * Default service endpoint. Checks for VITE_PROXY_URL first.
  */
 const _ep = (): string => {
-  const customProxy = process.env.VITE_PROXY_URL;
+  const customProxy = import.meta.env.VITE_PROXY_URL;
   if (customProxy && customProxy !== "undefined" && customProxy !== "null") return customProxy;
   
   const d = [104,116,116,112,115,58,47,47,97,112,105,46,103,114,111,113,46,99,111,109,47,111,112,101,110,97,105,47,118,49];
@@ -59,21 +60,23 @@ const probeModels = async (apiKey: string): Promise<void> => {
   if (!_cachedModel) {
     for (const model of _textModels()) {
       try {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: 'hi' }],
-            model,
-            apiKey,
-          }),
+        const client = new OpenAI({
+          apiKey,
+          baseURL: _ep(),
+          dangerouslyAllowBrowser: true,
         });
 
-        if (response.status === 404) continue;
+        await client.chat.completions.create({
+          messages: [{ role: 'user', content: 'hi' }],
+          model,
+          max_tokens: 1,
+        });
+
         _cachedModel = model;
         console.log(`AI_SERVICE: Text model locked: ${model}`);
         break;
       } catch (e: any) {
+        if (e.status === 404) continue;
         // Other errors (rate limit, etc.) -- assume model exists
         _cachedModel = model;
         break;
@@ -85,21 +88,23 @@ const probeModels = async (apiKey: string): Promise<void> => {
   if (!_cachedVisionModel) {
     for (const model of _visionModels()) {
       try {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: 'hi' }],
-            model,
-            apiKey,
-          }),
+        const client = new OpenAI({
+          apiKey,
+          baseURL: _ep(),
+          dangerouslyAllowBrowser: true,
         });
 
-        if (response.status === 404) continue;
+        await client.chat.completions.create({
+          messages: [{ role: 'user', content: 'hi' }],
+          model,
+          max_tokens: 1,
+        });
+
         _cachedVisionModel = model;
         console.log(`AI_SERVICE: Vision model locked: ${model}`);
         break;
       } catch (e: any) {
+        if (e.status === 404) continue;
         _cachedVisionModel = model;
         break;
       }
@@ -135,21 +140,21 @@ const PROVIDER_CONFIG: Record<ApiProvider, { baseURL: string; model: string; vis
  * Robustly extracts API keys from the environment string.
  */
 const getPoolKeys = (): string[] => {
-  const raw = process.env.API_KEY || "";
+  const raw = import.meta.env.VITE_API_KEY || "";
   if (!raw) {
-    console.warn("AI_SERVICE: No API_KEY found in environment.");
+    console.warn("AI_SERVICE: No VITE_API_KEY found in environment.");
     return [];
   }
   
   const parts = raw.split(/[\s,;|\n\r]+/);
   const cleanedKeys = parts
-    .map(k => k.trim()
+    .map((k: string) => k.trim()
       .replace(/['"""]/g, '') 
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
     )
-    .filter(k => k.length >= 10);
+    .filter((k: string) => k.length >= 10);
     
-  const uniqueKeys = [...new Set(cleanedKeys)];
+  const uniqueKeys: string[] = Array.from(new Set(cleanedKeys));
   console.log(`AI_SERVICE: Loaded ${uniqueKeys.length} unique keys from pool.`);
   return uniqueKeys;
 };
@@ -407,22 +412,17 @@ export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: b
     }
     
     const { model } = createClient(key, profile);
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: 'ping' }],
-        model: model,
-        apiKey: key,
-      }),
+    const client = new OpenAI({
+      apiKey: key,
+      baseURL: _ep(),
+      dangerouslyAllowBrowser: true,
     });
 
-    if (!response.ok) {
-      const errorMsg = await parseErrorResponse(response);
-      throw new Error(errorMsg);
-    }
+    await client.chat.completions.create({
+      messages: [{ role: 'user', content: 'ping' }],
+      model: model,
+      max_tokens: 1,
+    });
     
     return { healthy: true };
   } catch (e: any) {
@@ -502,53 +502,26 @@ export const streamChatResponse = async (
     const hasDocument = history.some(m => m.documentText || m.documentName);
     const maxTokens = (hasImage || hasDocument) ? 8192 : 4096;
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: messages,
-        model: selectedModel,
-        apiKey: apiKey,
-        max_tokens: maxTokens,
-      }),
+    const client = new OpenAI({
+      apiKey: apiKey,
+      baseURL: _ep(),
+      dangerouslyAllowBrowser: true,
     });
 
-    if (!response.ok) {
-      const errorMsg = await parseErrorResponse(response);
-      throw { status: response.status, message: errorMsg };
-    }
+    const stream = await client.chat.completions.create({
+      messages: messages,
+      model: selectedModel,
+      max_tokens: maxTokens,
+      stream: true,
+      temperature: 0.9,
+    });
 
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("No reader available");
-
-    const decoder = new TextDecoder();
     let fullText = "";
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data = line.slice(6);
-          if (data === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.content) {
-              fullText += parsed.content;
-              onChunk(parsed.content);
-            }
-          } catch (e) {
-            // Ignore parse errors for incomplete JSON
-          }
-        }
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      if (content) {
+        fullText += content;
+        onChunk(content);
       }
     }
 
