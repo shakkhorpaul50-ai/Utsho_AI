@@ -80,6 +80,14 @@ const App: React.FC = () => {
 
   const c = theme.colors;
 
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   /**
    * Parses AI response text to extract code blocks and math blocks.
    * Returns the cleaned text (without code/math) and extracted CanvasBlocks.
@@ -930,14 +938,14 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen font-['Hind_Siliguri',_sans-serif]" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
       {isToolsOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
-          <div className="border rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-6" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-            <div className="flex items-center justify-between">
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center ${isMobile ? 'p-0' : 'p-4'} backdrop-blur-sm bg-black/50`}>
+          <div className={`border ${isMobile ? 'h-full rounded-none' : 'rounded-3xl max-w-md'} w-full shadow-2xl flex flex-col`} style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+            <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: c.borderPrimary }}>
               <h3 className="text-xl font-black uppercase tracking-widest" style={{ color: c.accent }}>AI Tools</h3>
-              <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={20} /></button>
+              <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={isMobile ? 24 : 20} /></button>
             </div>
             
-            <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
               <button 
                 onClick={() => { setIsToolsOpen(false); setInputText(''); }}
                 className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
@@ -1039,72 +1047,78 @@ const App: React.FC = () => {
       )}
 
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
-           <div className="border p-8 rounded-3xl w-full max-w-md space-y-6 shadow-2xl" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-              <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: c.accent }}><Settings size={20} /> Settings</h3>
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center ${isMobile ? 'p-0' : 'p-4'} backdrop-blur-sm bg-black/50`}>
+           <div className={`border ${isMobile ? 'h-full rounded-none' : 'p-8 rounded-3xl max-w-md'} w-full space-y-6 shadow-2xl flex flex-col`} style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+              <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: c.borderPrimary }}>
+                <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: c.accent }}><Settings size={20} /> Settings</h3>
+                <button onClick={() => setIsSettingsOpen(false)} style={{ color: c.textMuted }}><X size={isMobile ? 24 : 20} /></button>
+              </div>
               
-              <ThemePicker />
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                <ThemePicker />
 
-              <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI MODEL (GROQ)</label>
-                 <div className="grid grid-cols-2 gap-2">
-                   {([
-                     { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', icon: <Sparkles size={12} /> },
-                     { id: 'deepseek-v3', label: 'DeepSeek V3', icon: <Calculator size={12} /> },
-                     { id: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', icon: <Code size={12} /> },
-                     { id: 'gemma-3-27b', label: 'Gemma 3-27B', icon: <PenTool size={12} /> },
-                     { id: 'llama-3.1-8b', label: 'Llama 3.1 8B', icon: <RefreshCcw size={12} /> },
-                   ]).map(m => (
-                     <button
-                       key={m.id}
-                       onClick={() => setSelectedModelInput(m.id)}
-                       className="py-2.5 px-2 rounded-xl border-2 font-bold text-[10px] transition-all flex items-center justify-center gap-1.5"
-                       style={{
-                         backgroundColor: selectedModelInput === m.id ? c.accentSubtle : c.bgTertiary,
-                         borderColor: selectedModelInput === m.id ? c.accent : c.borderPrimary,
-                         color: selectedModelInput === m.id ? c.accent : c.textSecondary,
-                       }}
-                     >
-                       {m.icon}
-                       {m.label}
-                     </button>
-                   ))}
-                 </div>
+                <div className="space-y-2">
+                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI MODEL (GROQ)</label>
+                   <div className="grid grid-cols-2 gap-2">
+                     {([
+                       { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', icon: <Sparkles size={12} /> },
+                       { id: 'deepseek-v3', label: 'DeepSeek V3', icon: <Calculator size={12} /> },
+                       { id: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', icon: <Code size={12} /> },
+                       { id: 'gemma-3-27b', label: 'Gemma 3-27B', icon: <PenTool size={12} /> },
+                       { id: 'llama-3.1-8b', label: 'Llama 3.1 8B', icon: <RefreshCcw size={12} /> },
+                     ]).map(m => (
+                       <button
+                         key={m.id}
+                         onClick={() => setSelectedModelInput(m.id)}
+                         className="py-2.5 px-2 rounded-xl border-2 font-bold text-[10px] transition-all flex items-center justify-center gap-1.5"
+                         style={{
+                           backgroundColor: selectedModelInput === m.id ? c.accentSubtle : c.bgTertiary,
+                           borderColor: selectedModelInput === m.id ? c.accent : c.borderPrimary,
+                           color: selectedModelInput === m.id ? c.accent : c.textSecondary,
+                         }}
+                       >
+                         {m.icon}
+                         {m.label}
+                       </button>
+                     ))}
+                   </div>
+                </div>
+
+                <div className="space-y-2">
+                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
+                   <div className="grid grid-cols-2 gap-2">
+                     {([
+                       { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
+                       { id: 'gemini' as ApiProvider, label: 'Gemini' },
+                       { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
+                       { id: 'grok' as ApiProvider, label: 'Grok' },
+                     ]).map(p => (
+                       <button
+                         key={p.id}
+                         onClick={() => setCustomProviderInput(p.id)}
+                         className="py-2.5 rounded-xl border-2 font-bold text-xs transition-all"
+                         style={{
+                           backgroundColor: customProviderInput === p.id ? c.accentSubtle : c.bgTertiary,
+                           borderColor: customProviderInput === p.id ? c.accent : c.borderPrimary,
+                           color: customProviderInput === p.id ? c.accent : c.textSecondary,
+                         }}
+                       >
+                         {customProviderInput === p.id && <Check size={10} className="inline mr-1" />}
+                         {p.label}
+                       </button>
+                     ))}
+                   </div>
+                </div>
+                <div className="space-y-2">
+                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
+                   <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
+                   <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
-                 <div className="grid grid-cols-2 gap-2">
-                   {([
-                     { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
-                     { id: 'gemini' as ApiProvider, label: 'Gemini' },
-                     { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
-                     { id: 'grok' as ApiProvider, label: 'Grok' },
-                   ]).map(p => (
-                     <button
-                       key={p.id}
-                       onClick={() => setCustomProviderInput(p.id)}
-                       className="py-2.5 rounded-xl border-2 font-bold text-xs transition-all"
-                       style={{
-                         backgroundColor: customProviderInput === p.id ? c.accentSubtle : c.bgTertiary,
-                         borderColor: customProviderInput === p.id ? c.accent : c.borderPrimary,
-                         color: customProviderInput === p.id ? c.accent : c.textSecondary,
-                       }}
-                     >
-                       {customProviderInput === p.id && <Check size={10} className="inline mr-1" />}
-                       {p.label}
-                     </button>
-                   ))}
-                 </div>
-              </div>
-              <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
-                 <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
-                 <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
-              </div>
-              <div className="flex gap-3">
-                 <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor = c.bgTertiary)} onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>Cancel</button>
-                 <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
+              <div className="p-6 border-t flex gap-3" style={{ borderColor: c.borderPrimary }}>
+                <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }}>Cancel</button>
+                <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
               </div>
            </div>
         </div>
@@ -2049,6 +2063,29 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
+      {/* Mobile Bottom Nav */}
+      {isMobile && (
+        <nav className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-around p-2 border-t backdrop-blur-lg safe-area-bottom" style={{ backgroundColor: `${c.bgSecondary}ee`, borderColor: c.borderPrimary }}>
+          <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isSidebarOpen ? c.accent : c.textMuted }}>
+            <Menu size={20} />
+            <span className="text-[10px] font-bold">Menu</span>
+          </button>
+          <button onClick={() => createNewSession()} className="flex flex-col items-center gap-1 p-2" style={{ color: c.accent }}>
+            <div className="p-3 rounded-full -mt-10 shadow-xl transition-all active:scale-90" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 8px 20px ${c.accentShadow}` }}>
+              <Plus size={24} />
+            </div>
+            <span className="text-[10px] font-bold">New</span>
+          </button>
+          <button onClick={() => setIsToolsOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isToolsOpen ? c.accent : c.textMuted }}>
+            <Wrench size={20} />
+            <span className="text-[10px] font-bold">Tools</span>
+          </button>
+          <button onClick={() => setIsSettingsOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isSettingsOpen ? c.accent : c.textMuted }}>
+            <Settings size={20} />
+            <span className="text-[10px] font-bold">Settings</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 };

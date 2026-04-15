@@ -225,7 +225,20 @@ const getSystemInstruction = async (profile: UserProfile) => {
   const preferredLang = profile.preferredLanguage || "unspecified";
   const learnedContext = formatContextForPrompt(getUserContext(email));
 
+  const preferredModel = profile.preferredModel || 'llama-3.3-70b';
+  const modelInfo = {
+    'llama-3.3-70b': { name: 'Llama 3.3 70B Versatile', size: '70 Billion', focus: 'High-reasoning, logic, and general tasks' },
+    'deepseek-v3': { name: 'DeepSeek-V3 (MoE)', size: '671 Billion (37B active)', focus: 'Complex logic, mathematics, and deep analysis' },
+    'qwen-2.5-coder': { name: 'Qwen 2.5 Coder 32B', size: '32 Billion', focus: 'Programming, debugging, and technical assistance' },
+    'gemma-3-27b': { name: 'Gemma 3 27B', size: '27 Billion', focus: 'Creative writing, Bengali literature, and nuanced expression' },
+    'llama-3.1-8b': { name: 'Llama 3.1 8B Instant', size: '8 Billion', focus: 'Fast, low-latency conversational chat' }
+  }[preferredModel as keyof typeof GROQ_MODELS] || { name: 'Llama 3.3 70B', size: '70 Billion', focus: 'General intelligence' };
+
   let coreInstruction = `
+    - YOUR IDENTITY: You are Utsho AI, a highly advanced artificial intelligence developed by Shakkhor Paul.
+    - CURRENT MODEL: You are currently running on the ${modelInfo.name} model.
+    - PARAMETER SIZE: Your model size is ${modelInfo.size} parameters.
+    - YOUR FOCUS: ${modelInfo.focus}.
     - ACT LIKE A REAL PERSON, NOT AN AI.
     - NEVER say "As an AI model" or "I am here to help". 
     - BE CONCISE. Short messages are better. Don't yap. Long messages are boring.
