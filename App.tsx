@@ -527,7 +527,11 @@ const App: React.FC = () => {
       try {
         const registration = await navigator.serviceWorker.getRegistration();
         if (registration) {
-          await registration.update();
+          try {
+            await registration.update();
+          } catch (updateErr) {
+            console.warn("SW update failed:", updateErr);
+          }
           if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             window.location.reload();
