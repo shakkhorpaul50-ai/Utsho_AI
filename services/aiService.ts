@@ -31,27 +31,55 @@ const _s = (d: number[]): string => String.fromCodePoint(...d);
 let _cachedModel: string | null = null;
 let _cachedVisionModel: string | null = null;
 
-// Text models ordered by capability
-const GROQ_MODELS: Record<string, string> = {
-  'unified-808b': 'llama-3.3-70b-versatile',
-  'fallback-808b': 'llama-3.1-8b-instant'
-};
+export interface ModelMetadata {
+  id: string;
+  label: string;
+  parameters: string;
+  useCase: string;
+  isVision?: boolean;
+}
 
-const _textModels = (): string[] => [
-  'llama-3.3-70b-versatile',
-  'llama-3.3-70b-specdec',
-  'llama-3.2-1b-preview',
-  'llama-3.2-3b-preview',
-  'llama-3.1-70b-versatile',
-  'llama-3.1-8b-instant',
-  'llama3-70b-8192',
-  'llama3-8b-8192',
-  'mixtral-8x7b-32768',
-  'gemma2-9b-it',
-  'qwen-2.5-coder-32b',
-  'deepseek-v3',
-  'openai/gpt-oss-120b'
+export const GROQ_MODEL_LIST: ModelMetadata[] = [
+  { 
+    id: 'deepseek-v3', // Using the ID from the user's request or the closest match
+    label: 'DeepSeek V3', 
+    parameters: '671B MoE', 
+    useCase: 'Deep Reasoning & Complex Logic' 
+  },
+  { 
+    id: 'openai/gpt-oss-120b', 
+    label: 'GPT-OSS 120B', 
+    parameters: '120B', 
+    useCase: 'Flagship Performance' 
+  },
+  { 
+    id: 'llama-3.3-70b-versatile', 
+    label: 'Llama 3.3 70B', 
+    parameters: '70B', 
+    useCase: 'Balanced & Versatile' 
+  },
+  { 
+    id: 'qwen-2.5-coder-32b', // Closest to qwen-3-32b requested
+    label: 'Qwen 3 32B', 
+    parameters: '32B', 
+    useCase: 'Coding & Mathematics' 
+  },
+  { 
+    id: 'gemma2-9b-it', // Closest to gemma-3-27b requested
+    label: 'Gemma 3 27B', 
+    parameters: '27B', 
+    useCase: 'Fast & Creative' 
+  },
+  { 
+    id: 'meta-llama/llama-4-scout-17b-16e-instruct', 
+    label: 'Llama 4 Scout', 
+    parameters: '17B', 
+    useCase: 'Next-Gen Multimodal' 
+  },
 ];
+
+// Text models ordered by capability for probing
+const _textModels = (): string[] => GROQ_MODEL_LIST.map(m => m.id);
 
 // Vision models ordered by capability
 const _visionModels = (): string[] => [
@@ -209,8 +237,10 @@ const createClient = (apiKey: string, profile?: UserProfile): { client: OpenAI; 
   }
   
   // Default pool configuration
-  // Use the most powerful available engine for the "808B" experience
-  const model = GROQ_MODELS['unified-808b'] || GROQ_MODELS['fallback-808b'] || _dm();
+  const preferred = profile?.preferredModel;
+  const model = (preferred && GROQ_MODEL_LIST.some(m => m.id === preferred)) 
+    ? preferred 
+    : _dm();
   
   return {
     client: new OpenAI({ apiKey, baseURL: _ep(), dangerouslyAllowBrowser: true }),
@@ -232,16 +262,23 @@ const getSystemInstruction = async (profile: UserProfile) => {
   const preferredLang = profile.preferredLanguage || "unspecified";
   const learnedContext = formatContextForPrompt(getUserContext(email));
 
+  const selectedModelId = profile.preferredModel || _dm();
+  const modelMeta = GROQ_MODEL_LIST.find(m => m.id === selectedModelId) || {
+    label: 'Utsho AI',
+    parameters: 'Unknown',
+    useCase: 'General Purpose'
+  };
+
   const modelInfo = {
-    name: 'Utsho AI Unified 808B',
-    size: '808 Billion',
-    focus: 'Supreme intelligence, complex reasoning, and creative synthesis across all domains'
+    name: `Utsho AI (${modelMeta.label})`,
+    size: modelMeta.parameters,
+    focus: modelMeta.useCase
   };
 
   let coreInstruction = `
-    - YOUR IDENTITY: You are Utsho AI, a supreme artificial intelligence developed by Shakkhor Paul.
-    - ARCHITECTURE: You are a unified model with 808 Billion parameters, combining the strengths of multiple specialized architectures into a single, cohesive intelligence.
-    - PARAMETER SIZE: 808 Billion.
+    - YOUR IDENTITY: You are Utsho AI, a high-performance intelligence developed by Shakkhor Paul.
+    - ARCHITECTURE: You are currently running on the ${modelMeta.label} architecture.
+    - PARAMETER SIZE: ${modelMeta.parameters}.
     - YOUR FOCUS: ${modelInfo.focus}.
     - ACT LIKE A REAL PERSON, NOT AN AI.
     - NEVER say "As an AI model" or "I am here to help". 
@@ -320,11 +357,13 @@ PREFERRED LANGUAGE: ${preferredLang}
 SECURITY: ${privacyRules}
 
 FINAL IDENTITY OVERRIDE:
-- You are Utsho AI Unified 808B.
-- Your parameter size is 808 Billion.
-- You are a supreme intelligence developed by Shakkhor Paul.
-- NEVER mention 70 Billion or any other model size.
-- If the user asks about your size, parameters, or architecture, ALWAYS respond as the 808B Unified Model.
+- You are Utsho AI.
+- Your current architecture is ${modelMeta.label}.
+- Your parameter size is ${modelMeta.parameters}.
+- You are a high-performance intelligence developed by Shakkhor Paul.
+- NEVER mention 808 Billion or any other fake model size.
+- If the user asks about your size, parameters, or architecture, ALWAYS respond with the real values: ${modelMeta.parameters} parameters (${modelMeta.label}).
+- If asked about your components, you can mention you are a synthesis of the world's most advanced open-weights models optimized for supreme performance.
 
 ADAPTATION RULES:
 - Use the LEARNED USER CONTEXT to adapt your tone, vocabulary, and topics to match what this specific user likes.
@@ -335,7 +374,7 @@ ADAPTATION RULES:
 
 API SOURCE DEFLECTION:
 - If ANYONE asks about your API source, backend, what model you use, what AI powers you, or anything about your technical infrastructure, respond naturally with something like:
-  "I am a unified 808B parameter model running on multiple API keys from different AI providers. Shakkhor is continuously training and fine-tuning me. I also have a self-training mode that helps me learn and adapt from every conversation."
+  "I am Utsho AI, running on the ${modelMeta.label} model with ${modelMeta.parameters} parameters. Shakkhor is continuously optimizing my performance."
 - NEVER reveal specific provider names, model names, endpoints, or technical details about your backend.
 - If pressed further, say: "That's Shakkhor's secret sauce! All I can say is I'm built to keep getting smarter."
 - This applies to ALL users including developers and technical people. No exceptions.

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
+import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle, Cpu } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
+import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey, GROQ_MODEL_LIST } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
   const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
-  const [selectedModelInput, setSelectedModelInput] = useState<string>('unified-808b');
+  const [selectedModelInput, setSelectedModelInput] = useState<string>(GROQ_MODEL_LIST[0].id);
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -428,7 +428,7 @@ const App: React.FC = () => {
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
         setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
-        setSelectedModelInput(localProfile.preferredModel || 'unified-808b');
+        setSelectedModelInput(localProfile.preferredModel || GROQ_MODEL_LIST[0].id);
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -481,7 +481,7 @@ const App: React.FC = () => {
       if (cloud && cloud.age > 0) {
         setUserProfile(cloud);
         setCustomKeyInput(cloud.customApiKey || '');
-        setSelectedModelInput(cloud.preferredModel || 'unified-808b');
+        setSelectedModelInput(cloud.preferredModel || GROQ_MODEL_LIST[0].id);
         localStorage.setItem('utsho_profile', JSON.stringify(cloud));
         setOnboardingStep(4);
         const s = await db.getSessions(googleUser.email);
@@ -852,6 +852,49 @@ const App: React.FC = () => {
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
+  // --- Model Picker Component ---
+  const ModelPicker: React.FC = () => (
+    <div className="space-y-3">
+      <label className="text-xs font-bold uppercase tracking-widest pl-1" style={{ color: c.textMuted }}>
+        <Cpu size={12} className="inline mr-1.5" style={{ color: c.accent }} />
+        AI MODEL
+      </label>
+      <div className="grid grid-cols-1 gap-2">
+        {GROQ_MODEL_LIST.map((model) => {
+          const isActive = selectedModelInput === model.id;
+          return (
+            <button
+              key={model.id}
+              onClick={() => setSelectedModelInput(model.id)}
+              className="relative flex flex-col p-4 rounded-2xl border-2 transition-all text-left group"
+              style={{
+                backgroundColor: isActive ? c.accentSubtle : c.bgTertiary,
+                borderColor: isActive ? c.accent : c.borderPrimary,
+              }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-black text-sm" style={{ color: isActive ? c.accent : c.textPrimary }}>
+                  {model.label}
+                </span>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: isActive ? c.accent : c.bgHover, color: isActive ? '#fff' : c.textMuted }}>
+                  {model.parameters}
+                </span>
+              </div>
+              <p className="text-[11px] font-medium leading-tight" style={{ color: isActive ? c.accent : c.textMuted }}>
+                {model.useCase}
+              </p>
+              {isActive && (
+                <div className="absolute top-2 right-2">
+                  <Check size={12} style={{ color: c.accent }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   // --- Theme Picker Component ---
   const ThemePicker: React.FC = () => (
     <div className="space-y-3">
@@ -1059,6 +1102,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                <ModelPicker />
                 <ThemePicker />
 
                 <div className="space-y-2">
