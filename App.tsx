@@ -1062,33 +1062,6 @@ const App: React.FC = () => {
                 <ThemePicker />
 
                 <div className="space-y-2">
-                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI MODEL (GROQ)</label>
-                   <div className="grid grid-cols-2 gap-2">
-                     {([
-                       { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', icon: <Sparkles size={12} /> },
-                       { id: 'deepseek-v3', label: 'DeepSeek V3', icon: <Calculator size={12} /> },
-                       { id: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', icon: <Code size={12} /> },
-                       { id: 'gemma-3-27b', label: 'Gemma 3-27B', icon: <PenTool size={12} /> },
-                       { id: 'llama-3.1-8b', label: 'Llama 3.1 8B', icon: <RefreshCcw size={12} /> },
-                     ]).map(m => (
-                       <button
-                         key={m.id}
-                         onClick={() => setSelectedModelInput(m.id)}
-                         className="py-2.5 px-2 rounded-xl border-2 font-bold text-[10px] transition-all flex items-center justify-center gap-1.5"
-                         style={{
-                           backgroundColor: selectedModelInput === m.id ? c.accentSubtle : c.bgTertiary,
-                           borderColor: selectedModelInput === m.id ? c.accent : c.borderPrimary,
-                           color: selectedModelInput === m.id ? c.accent : c.textSecondary,
-                         }}
-                       >
-                         {m.icon}
-                         {m.label}
-                       </button>
-                     ))}
-                   </div>
-                </div>
-
-                <div className="space-y-2">
                    <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
                    <div className="grid grid-cols-2 gap-2">
                      {([
