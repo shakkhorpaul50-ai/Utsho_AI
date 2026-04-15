@@ -14,6 +14,7 @@ export interface UserProfile {
   customApiProvider?: ApiProvider;
   emotionalMemory?: string; 
   preferredLanguage?: string;
+  preferredModel?: string;
 }
 
 export type CanvasType = 'code' | 'math' | 'explain' | 'word' | 'graph';
