@@ -69,9 +69,8 @@ const _ep = (): string => {
  * Default model identifier (encoded for security).
  */
 const _dm = (): string => {
-  // llama-3.3-70b-versatile (most capable reliably-available free model on Groq)
-  const d = [108,108,97,109,97,45,51,46,51,45,55,48,98,45,118,101,114,115,97,116,105,108,101];
-  return d.map(c => String.fromCharCode(c)).join('');
+  // Unified 808B model (DeepSeek V3)
+  return 'deepseek-v3';
 };
 
 /**

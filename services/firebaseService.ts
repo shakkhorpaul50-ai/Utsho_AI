@@ -121,7 +121,7 @@ export const saveUserProfile = async (profile: UserProfile) => {
     customApiKey: profile.customApiKey || '',
     emotionalMemory: profile.emotionalMemory || '',
     preferredLanguage: profile.preferredLanguage || '',
-    preferredModel: profile.preferredModel || 'llama-3.3-70b'
+    preferredModel: profile.preferredModel || 'unified-808b'
   }, { merge: true });
 };
 
