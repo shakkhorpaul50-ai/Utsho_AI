@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
   const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
-  const [selectedModelInput, setSelectedModelInput] = useState<string>('llama-3.3-70b');
+  const [selectedModelInput, setSelectedModelInput] = useState<string>('unified-808b');
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -428,7 +428,7 @@ const App: React.FC = () => {
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
         setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
-        setSelectedModelInput(localProfile.preferredModel || 'llama-3.3-70b');
+        setSelectedModelInput(localProfile.preferredModel || 'unified-808b');
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -481,7 +481,7 @@ const App: React.FC = () => {
       if (cloud && cloud.age > 0) {
         setUserProfile(cloud);
         setCustomKeyInput(cloud.customApiKey || '');
-        setSelectedModelInput(cloud.preferredModel || 'llama-3.3-70b');
+        setSelectedModelInput(cloud.preferredModel || 'unified-808b');
         localStorage.setItem('utsho_profile', JSON.stringify(cloud));
         setOnboardingStep(4);
         const s = await db.getSessions(googleUser.email);
@@ -829,9 +829,9 @@ const App: React.FC = () => {
           const OpenAI = (await import('openai')).default;
           const client = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1', dangerouslyAllowBrowser: true });
           const response = await client.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+            model: 'unified-808b',
             messages: [
-              { role: 'system', content: 'You are Utsho, a helpful AI assistant. Someone mentioned you in a direct message conversation. Give a brief, helpful response. Keep it short and conversational.' },
+              { role: 'system', content: 'You are Utsho, a helpful AI assistant. Someone mentioned you in a direct message conversation. Give a brief, helpful response. Keep it short and conversational. You are a unified 808B parameter model.' },
               { role: 'user', content: question }
             ],
             max_tokens: 300,

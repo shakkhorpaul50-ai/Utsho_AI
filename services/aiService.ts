@@ -33,28 +33,36 @@ let _cachedVisionModel: string | null = null;
 
 // Text models ordered by capability
 const GROQ_MODELS: Record<string, string> = {
-  'unified-808b': 'deepseek-v3',
-  'fallback-808b': 'llama-3.3-70b-versatile'
+  'unified-808b': 'llama-3.3-70b-versatile',
+  'fallback-808b': 'llama-3.1-8b-instant'
 };
 
 const _textModels = (): string[] => [
-  'deepseek-v3',
   'llama-3.3-70b-versatile',
+  'llama-3.3-70b-specdec',
+  'llama-3.2-1b-preview',
+  'llama-3.2-3b-preview',
+  'llama-3.1-70b-versatile',
+  'llama-3.1-8b-instant',
+  'llama3-70b-8192',
+  'llama3-8b-8192',
+  'mixtral-8x7b-32768',
+  'gemma2-9b-it',
   'qwen-2.5-coder-32b',
-  'gemma-3-27b',
-  'llama-3.1-8b-instant'
+  'deepseek-v3',
+  'openai/gpt-oss-120b'
 ];
 
 // Vision models ordered by capability
 const _visionModels = (): string[] => [
+  'llama-3.2-90b-vision-preview',
+  'llama-3.2-11b-vision-preview',
   // Llama 4 Scout (multimodal, ~109B MoE)
   [109,101,116,97,45,108,108,97,109,97,47,108,108,97,109,97,45,52,45,115,99,111,117,116,45,49,55,98,45,49,54,101,45,105,110,115,116,114,117,99,116].map(c => String.fromCharCode(c)).join(''),
-  // Llama 3.2 11B vision
-  [108,108,97,109,97,45,51,46,50,45,49,49,98,45,118,105,115,105,111,110,45,112,114,101,118,105,101,119].map(c => String.fromCharCode(c)).join(''),
 ];
 
 // Default fallbacks
-const _dm = (): string => _cachedModel || 'deepseek-v3';
+const _dm = (): string => _cachedModel || 'llama-3.3-70b-versatile';
 const _vm = (): string => _cachedVisionModel || _visionModels()[_visionModels().length - 1];
 
 /**
