@@ -409,6 +409,44 @@ const App: React.FC = () => {
     return map[lang] || lang.charAt(0).toUpperCase() + lang.slice(1);
   };
 
+  // --- Mobile Back Button & Orientation Handling ---
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (canvasOpen) {
+        setCanvasOpen(false);
+        window.history.pushState(null, '', window.location.pathname);
+      } else if (isSidebarOpen) {
+        setIsSidebarOpen(false);
+        window.history.pushState(null, '', window.location.pathname);
+      } else if (isToolsOpen) {
+        setIsToolsOpen(false);
+        window.history.pushState(null, '', window.location.pathname);
+      } else if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        window.history.pushState(null, '', window.location.pathname);
+      } else if (isFeedbackOpen) {
+        setIsFeedbackOpen(false);
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+
+    if (canvasOpen || isSidebarOpen || isToolsOpen || isSettingsOpen || isFeedbackOpen) {
+      window.history.pushState(null, '', window.location.pathname);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [canvasOpen, isSidebarOpen, isToolsOpen, isSettingsOpen, isFeedbackOpen]);
+
+  useEffect(() => {
+    // Attempt to lock orientation to portrait on mobile
+    if (window.innerWidth < 768 && screen.orientation && (screen.orientation as any).lock) {
+      (screen.orientation as any).lock('portrait').catch(() => {
+        // Silently fail if not supported or allowed
+      });
+    }
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [sessions, activeSessionId, isLoading]);
@@ -1388,7 +1426,7 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-hide touch-pan-y">
           {sessions.map(s => (
             <div key={s.id} onClick={() => { setActiveSessionId(s.id); if(window.innerWidth < 768) setIsSidebarOpen(false); }} className="group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border" style={{ backgroundColor: activeSessionId === s.id ? c.bgTertiary : 'transparent', color: activeSessionId === s.id ? c.textPrimary : c.textMuted, borderColor: activeSessionId === s.id ? c.borderSecondary : 'transparent', boxShadow: activeSessionId === s.id ? '0 4px 14px rgba(0,0,0,0.15)' : 'none' }}>
               <MessageSquare size={16} style={{ color: activeSessionId === s.id ? c.accent : undefined }} /> 
@@ -1950,7 +1988,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 py-8 custom-scrollbar touch-pan-y overscroll-contain">
           <div className="max-w-3xl mx-auto space-y-6 pb-4">
             {!activeSession || activeSession.messages.length === 0 ? (
               <div className="h-[65vh] flex flex-col items-center justify-center space-y-6 text-center animate-in fade-in slide-in-from-top-8 duration-700">
