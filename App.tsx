@@ -992,7 +992,30 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen font-['Hind_Siliguri',_sans-serif]" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
+    <div className="flex h-screen font-['Hind_Siliguri',_sans-serif] overflow-hidden" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t z-[60] flex items-center justify-around px-4 backdrop-blur-xl" style={{ backgroundColor: `${c.bgSecondary}f2`, borderColor: c.borderPrimary }}>
+        <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center gap-1" style={{ color: isSidebarOpen ? c.accent : c.textMuted }}>
+          <Menu size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Chats</span>
+        </button>
+        <button onClick={() => setIsToolsOpen(true)} className="flex flex-col items-center gap-1" style={{ color: isToolsOpen ? c.accent : c.textMuted }}>
+          <Wrench size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Tools</span>
+        </button>
+        <button onClick={() => createNewSession()} className="relative -top-6 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90" style={{ backgroundColor: c.accent, boxShadow: `0 8px 20px ${c.accentShadow}`, color: '#fff' }}>
+          <Plus size={28} />
+        </button>
+        <button onClick={() => setIsFeedbackOpen(true)} className="flex flex-col items-center gap-1" style={{ color: isFeedbackOpen ? c.accent : c.textMuted }}>
+          <MessageSquare size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Inbox</span>
+        </button>
+        <button onClick={() => setIsSettingsOpen(true)} className="flex flex-col items-center gap-1" style={{ color: isSettingsOpen ? c.accent : c.textMuted }}>
+          <Settings size={20} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Settings</span>
+        </button>
+      </div>
+
       {isToolsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
           <div className="border rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-6" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
@@ -1402,13 +1425,13 @@ const App: React.FC = () => {
       {/* S-code / S-math Canvas Panel */}
       {canvasOpen && (
         <div 
-          className={`${canvasFullscreen ? 'fixed inset-0 z-[90]' : 'relative'} flex flex-col border-l`}
+          className={`${canvasFullscreen || window.innerWidth < 768 ? 'fixed inset-0 z-[90]' : 'relative'} flex flex-col border-l`}
           style={{ 
             backgroundColor: c.bgPrimary, 
             borderColor: c.borderPrimary,
-            width: canvasFullscreen ? '100%' : '45%',
-            minWidth: canvasFullscreen ? '100%' : '380px',
-            maxWidth: canvasFullscreen ? '100%' : '600px',
+            width: (canvasFullscreen || window.innerWidth < 768) ? '100%' : '45%',
+            minWidth: (canvasFullscreen || window.innerWidth < 768) ? '100%' : '380px',
+            maxWidth: (canvasFullscreen || window.innerWidth < 768) ? '100%' : '600px',
             order: 2,
           }}
         >
@@ -1919,14 +1942,12 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <main className={`flex-1 flex flex-col relative overflow-hidden ${canvasOpen && !canvasFullscreen ? 'hidden md:flex' : ''}`} style={{ order: 1 }}>
+      <main className={`flex-1 flex flex-col relative overflow-hidden ${canvasOpen && !canvasFullscreen ? 'hidden md:flex' : ''} pb-16 md:pb-0`} style={{ order: 1 }}>
         <div className="md:hidden h-14 border-b backdrop-blur-md flex items-center px-4 sticky top-0 z-40" style={{ borderColor: c.borderPrimary, backgroundColor: `${c.bgPrimary}cc` }}>
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2" style={{ color: c.textSecondary }}><Menu size={20} /></button>
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="font-black tracking-tighter text-lg leading-none" style={{ color: c.accent }}>UTSHO AI</div>
             <div className="text-[7px] font-black tracking-[0.2em] uppercase opacity-60" style={{ color: c.textMuted }}>299B Neural Ensemble</div>
           </div>
-          <button onClick={() => createNewSession()} className="p-2" style={{ color: c.textSecondary }}><Plus size={20} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-8 custom-scrollbar">
@@ -2081,14 +2102,14 @@ const App: React.FC = () => {
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-2 border rounded-[2.5rem] p-2.5 shadow-2xl transition-all" style={{ backgroundColor: `${c.bgSecondary}cc`, borderColor: c.borderPrimary }}>
+            <div className="flex items-end gap-1.5 md:gap-2 border rounded-[2.5rem] p-1.5 md:p-2.5 shadow-2xl transition-all" style={{ backgroundColor: `${c.bgSecondary}cc`, borderColor: c.borderPrimary }}>
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.h,.rb,.go,.rs,.sh,.yaml,.yml,.toml,.ini,.cfg,.log,.sql,.env" />
-              <button onClick={() => fileInputRef.current?.click()} className="p-3.5 transition-colors" style={{ color: c.textMuted }} title="Attach file"><Paperclip size={22} /></button>
-              <button onClick={() => setIsToolsOpen(true)} className="p-3.5 transition-colors" style={{ color: c.textMuted }} title="AI Tools"><Wrench size={22} /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3.5 transition-colors" style={{ color: c.textMuted }} title="Attach file"><Paperclip size={20} /></button>
+              <button onClick={() => setIsToolsOpen(true)} className="hidden md:block p-3.5 transition-colors" style={{ color: c.textMuted }} title="AI Tools"><Wrench size={22} /></button>
 
-              <textarea rows={1} value={inputText} onChange={e => { setInputText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Talk to Utsho..." className="flex-1 bg-transparent py-3.5 px-2 outline-none resize-none max-h-40 text-[15px]" style={{ color: c.textPrimary }} />
-              <button onClick={handleSendMessage} disabled={isLoading} className="p-4 rounded-full transition-all active:scale-90 shadow-xl" style={{ backgroundColor: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? c.accent : c.bgTertiary, boxShadow: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? `0 4px 14px ${c.accentShadow}` : 'none', color: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? '#fff' : c.textMuted }}>
-                 {isLoading ? <RefreshCcw size={22} className="animate-spin" /> : <Send size={22} />}
+              <textarea rows={1} value={inputText} onChange={e => { setInputText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Talk to Utsho..." className="flex-1 bg-transparent py-2.5 md:py-3.5 px-2 outline-none resize-none max-h-40 text-[14px] md:text-[15px]" style={{ color: c.textPrimary }} />
+              <button onClick={handleSendMessage} disabled={isLoading} className="p-3 md:p-4 rounded-full transition-all active:scale-90 shadow-xl" style={{ backgroundColor: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? c.accent : c.bgTertiary, boxShadow: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? `0 4px 14px ${c.accentShadow}` : 'none', color: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? '#fff' : c.textMuted }}>
+                 {isLoading ? <RefreshCcw size={20} className="animate-spin" /> : <Send size={20} />}
               </button>
             </div>
             <p className="text-[10px] text-center font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>UTSHO CAN MAKE MISTAKES. CHECK IMPORTANT INFO.</p>
