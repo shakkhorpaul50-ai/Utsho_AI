@@ -1281,9 +1281,11 @@ const App: React.FC = () => {
         <div className="p-4 flex flex-col gap-4">
           <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
           
-          <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-            <NeuralStatus />
-          </div>
+          {isAdmin && (
+            <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+              <NeuralStatus />
+            </div>
+          )}
 
           {isAdmin ? (
           <div className="border rounded-[2rem] shadow-2xl space-y-4 p-4" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
