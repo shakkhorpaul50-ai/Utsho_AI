@@ -1062,7 +1062,7 @@ const App: React.FC = () => {
               <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={20} /></button>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-y-auto max-h-[65vh] pr-1 custom-scrollbar touch-pan-y">
               <button 
                 onClick={() => { setIsToolsOpen(false); setInputText(''); }}
                 className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
@@ -1339,101 +1339,103 @@ const App: React.FC = () => {
       )}
 
       <aside className={`fixed md:relative z-50 inset-y-0 left-0 w-72 border-r flex flex-col transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`} style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-        <div className="p-4 flex flex-col gap-4">
-          <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
-          
-          {isAdmin && (
-            <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-              <NeuralStatus />
+        <div className="flex-1 overflow-y-auto custom-scrollbar touch-pan-y">
+          <div className="p-4 flex flex-col gap-4">
+            <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
+            
+            {isAdmin && (
+              <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+                <NeuralStatus />
+              </div>
+            )}
+
+            {isAdmin ? (
+            <div className="border rounded-[2rem] shadow-2xl space-y-4 p-4" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+               <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: c.borderPrimary }}>
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
+                     POOL HEALTH
+                  </div>
+                  <button onClick={handleResetPool} className="transition-colors" style={{ color: c.textMuted }}><RefreshCcw size={12} /></button>
+               </div>
+               
+               <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold" style={{ color: c.textMuted }}>AVAILABLE NODES</span>
+                    <span className="text-[10px] font-black text-emerald-400">{poolInfo.active}/{poolInfo.total}</span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: c.bgTertiary }}>
+                    <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${(poolInfo.active / Math.max(1, poolInfo.total)) * 100}%` }} />
+                  </div>
+               </div>
+
+               <div className="pt-2 border-t" style={{ borderColor: c.borderPrimary }}>
+                  <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar }}>
+                    {apiStatusText.toUpperCase()} {isLoading && "..."}
+                  </div>
+               </div>
             </div>
-          )}
-
-          {isAdmin ? (
-          <div className="border rounded-[2rem] shadow-2xl space-y-4 p-4" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-             <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: c.borderPrimary }}>
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
-                   POOL HEALTH
-                </div>
-                <button onClick={handleResetPool} className="transition-colors" style={{ color: c.textMuted }}><RefreshCcw size={12} /></button>
-             </div>
-             
-             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold" style={{ color: c.textMuted }}>AVAILABLE NODES</span>
-                  <span className="text-[10px] font-black text-emerald-400">{poolInfo.active}/{poolInfo.total}</span>
-                </div>
-                <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: c.bgTertiary }}>
-                  <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${(poolInfo.active / Math.max(1, poolInfo.total)) * 100}%` }} />
-                </div>
-             </div>
-
-             <div className="pt-2 border-t" style={{ borderColor: c.borderPrimary }}>
-                <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar }}>
-                  {apiStatusText.toUpperCase()} {isLoading && "..."}
-                </div>
-             </div>
-          </div>
-          ) : (
-          <div className="border rounded-2xl p-3 flex items-center justify-center" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-             <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar, padding: '4px 12px' }}>
-               {connectionHealth === 'error' ? 'RECONNECTING...' : 'ONLINE'} {isLoading && "..."}
-             </div>
-          </div>
-          )}
-
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>
-            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>Tools</span>
-            <button onClick={() => setIsToolsOpen(true)} className="transition-colors" style={{ color: c.textMuted }}><Wrench size={14} /></button>
-          </div>
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>
-            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>Settings</span>
-            <button onClick={() => setIsSettingsOpen(true)} className="transition-colors" style={{ color: c.textMuted }}><Settings size={14} /></button>
-          </div>
-          <button 
-            onClick={async () => { 
-              setIsFeedbackOpen(true); 
-              if (db.isDatabaseEnabled()) {
-                try {
-                  if (isAdmin) {
-                    const all = await db.getAllFeedback();
-                    setFeedbackMessages(all);
-                  } else {
-                    const replies = await db.getUserFeedbackReplies(userProfile!.email);
-                    const myFeedback = (await db.getAllFeedback()).filter(f => f.fromEmail === userProfile!.email.toLowerCase());
-                    setFeedbackMessages(myFeedback.length > 0 ? myFeedback : replies.map((r: any, i: number) => ({ id: `r${i}`, fromName: 'You', message: r.message, reply: r.reply, repliedAt: r.repliedAt, read: true, createdAt: new Date() })));
-                  }
-                } catch(e) { console.error(e); }
-              }
-            }}
-            className="flex items-center justify-between px-3 py-2 rounded-xl border transition-colors"
-            style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
-              {isAdmin ? 'Inbox' : 'Contact Admin'}
-            </span>
-            <MessageSquare size={14} style={{ color: c.textMuted }} />
-          </button>
-          
-          <button 
-            onClick={handleUpgrade}
-            className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all active:scale-95"
-            style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
-              Upgrade App
-            </span>
-            <RefreshCcw size={14} style={{ color: c.textMuted }} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-hide touch-pan-y">
-          {sessions.map(s => (
-            <div key={s.id} onClick={() => { setActiveSessionId(s.id); if(window.innerWidth < 768) setIsSidebarOpen(false); }} className="group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border" style={{ backgroundColor: activeSessionId === s.id ? c.bgTertiary : 'transparent', color: activeSessionId === s.id ? c.textPrimary : c.textMuted, borderColor: activeSessionId === s.id ? c.borderSecondary : 'transparent', boxShadow: activeSessionId === s.id ? '0 4px 14px rgba(0,0,0,0.15)' : 'none' }}>
-              <MessageSquare size={16} style={{ color: activeSessionId === s.id ? c.accent : undefined }} /> 
-              <div className="flex-1 truncate text-sm font-medium">{s.title}</div>
-              <button onClick={(e) => { e.stopPropagation(); db.deleteSession(userProfile!.email, s.id); setSessions(prev => prev.filter(x => x.id !== s.id)); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"><Trash2 size={14} /></button>
+            ) : (
+            <div className="border rounded-2xl p-3 flex items-center justify-center" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+               <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar, padding: '4px 12px' }}>
+                 {connectionHealth === 'error' ? 'RECONNECTING...' : 'ONLINE'} {isLoading && "..."}
+               </div>
             </div>
-          ))}
+            )}
+
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>Tools</span>
+              <button onClick={() => setIsToolsOpen(true)} className="transition-colors" style={{ color: c.textMuted }}><Wrench size={14} /></button>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>Settings</span>
+              <button onClick={() => setIsSettingsOpen(true)} className="transition-colors" style={{ color: c.textMuted }}><Settings size={14} /></button>
+            </div>
+            <button 
+              onClick={async () => { 
+                setIsFeedbackOpen(true); 
+                if (db.isDatabaseEnabled()) {
+                  try {
+                    if (isAdmin) {
+                      const all = await db.getAllFeedback();
+                      setFeedbackMessages(all);
+                    } else {
+                      const replies = await db.getUserFeedbackReplies(userProfile!.email);
+                      const myFeedback = (await db.getAllFeedback()).filter(f => f.fromEmail === userProfile!.email.toLowerCase());
+                      setFeedbackMessages(myFeedback.length > 0 ? myFeedback : replies.map((r: any, i: number) => ({ id: `r${i}`, fromName: 'You', message: r.message, reply: r.reply, repliedAt: r.repliedAt, read: true, createdAt: new Date() })));
+                    }
+                  } catch(e) { console.error(e); }
+                }
+              }}
+              className="flex items-center justify-between px-3 py-2 rounded-xl border transition-colors"
+              style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}
+            >
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
+                {isAdmin ? 'Inbox' : 'Contact Admin'}
+              </span>
+              <MessageSquare size={14} style={{ color: c.textMuted }} />
+            </button>
+            
+            <button 
+              onClick={handleUpgrade}
+              className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all active:scale-95"
+              style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}
+            >
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
+                Upgrade App
+              </span>
+              <RefreshCcw size={14} style={{ color: c.textMuted }} />
+            </button>
+          </div>
+
+          <div className="px-2 pb-10 space-y-1">
+            {sessions.map(s => (
+              <div key={s.id} onClick={() => { setActiveSessionId(s.id); if(window.innerWidth < 768) setIsSidebarOpen(false); }} className="group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border" style={{ backgroundColor: activeSessionId === s.id ? c.bgTertiary : 'transparent', color: activeSessionId === s.id ? c.textPrimary : c.textMuted, borderColor: activeSessionId === s.id ? c.borderSecondary : 'transparent', boxShadow: activeSessionId === s.id ? '0 4px 14px rgba(0,0,0,0.15)' : 'none' }}>
+                <MessageSquare size={16} style={{ color: activeSessionId === s.id ? c.accent : undefined }} /> 
+                <div className="flex-1 truncate text-sm font-medium">{s.title}</div>
+                <button onClick={(e) => { e.stopPropagation(); db.deleteSession(userProfile!.email, s.id); setSessions(prev => prev.filter(x => x.id !== s.id)); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="p-4 border-t flex flex-col gap-3" style={{ borderColor: c.borderPrimary, backgroundColor: `${c.bgSecondary}cc` }}>
