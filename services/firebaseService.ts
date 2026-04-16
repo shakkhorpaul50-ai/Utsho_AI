@@ -120,8 +120,7 @@ export const saveUserProfile = async (profile: UserProfile) => {
     googleId: profile.googleId || '',
     customApiKey: profile.customApiKey || '',
     emotionalMemory: profile.emotionalMemory || '',
-    preferredLanguage: profile.preferredLanguage || '',
-    preferredModel: profile.preferredModel || 'unified-808b'
+    preferredLanguage: profile.preferredLanguage || ''
   }, { merge: true });
 };
 

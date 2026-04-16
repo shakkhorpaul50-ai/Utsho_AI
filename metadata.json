@@ -1,5 +1,5 @@
 {
-  "name": "Utsho AI",
-  "description": "A high-performance AI assistant with a dynamic model switcher, featuring DeepSeek V3, GPT-OSS 120B, Llama 3.3, and more. Developed by Shakkhor Paul.",
+  "name": "Utsho-AI",
+  "description": "A sleek, high-performance AI chatbot interface supporting multiple providers (ChatGPT, Gemini, DeepSeek, Grok), designed for seamless, intelligent conversations.",
   "requestFramePermissions": []
 }

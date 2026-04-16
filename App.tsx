@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle, Cpu } from 'lucide-react';
+import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey, GROQ_MODEL_LIST } from './services/aiService';
+import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -31,7 +31,6 @@ const App: React.FC = () => {
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
   const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
-  const [selectedModelInput, setSelectedModelInput] = useState<string>(GROQ_MODEL_LIST[0].id);
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -79,14 +78,6 @@ const App: React.FC = () => {
   const isUserDebi = userProfile ? db.isDebi(userProfile.email) : false;
 
   const c = theme.colors;
-
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   /**
    * Parses AI response text to extract code blocks and math blocks.
@@ -428,7 +419,6 @@ const App: React.FC = () => {
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
         setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
-        setSelectedModelInput(localProfile.preferredModel || GROQ_MODEL_LIST[0].id);
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -481,7 +471,6 @@ const App: React.FC = () => {
       if (cloud && cloud.age > 0) {
         setUserProfile(cloud);
         setCustomKeyInput(cloud.customApiKey || '');
-        setSelectedModelInput(cloud.preferredModel || GROQ_MODEL_LIST[0].id);
         localStorage.setItem('utsho_profile', JSON.stringify(cloud));
         setOnboardingStep(4);
         const s = await db.getSessions(googleUser.email);
@@ -527,11 +516,7 @@ const App: React.FC = () => {
       try {
         const registration = await navigator.serviceWorker.getRegistration();
         if (registration) {
-          try {
-            await registration.update();
-          } catch (updateErr) {
-            console.warn("SW update failed:", updateErr);
-          }
+          await registration.update();
           if (registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             window.location.reload();
@@ -553,12 +538,7 @@ const App: React.FC = () => {
 
   const saveSettings = async () => {
     if (!userProfile) return;
-    const updated = { 
-      ...userProfile, 
-      customApiKey: customKeyInput.trim(), 
-      customApiProvider: customProviderInput,
-      preferredModel: selectedModelInput
-    };
+    const updated = { ...userProfile, customApiKey: customKeyInput.trim(), customApiProvider: customProviderInput };
     setUserProfile(updated);
     localStorage.setItem('utsho_profile', JSON.stringify(updated));
     if (db.isDatabaseEnabled()) await db.saveUserProfile(updated);
@@ -829,9 +809,9 @@ const App: React.FC = () => {
           const OpenAI = (await import('openai')).default;
           const client = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1', dangerouslyAllowBrowser: true });
           const response = await client.chat.completions.create({
-            model: 'unified-808b',
+            model: 'llama-3.3-70b-versatile',
             messages: [
-              { role: 'system', content: 'You are Utsho, a helpful AI assistant. Someone mentioned you in a direct message conversation. Give a brief, helpful response. Keep it short and conversational. You are a unified 808B parameter model.' },
+              { role: 'system', content: 'You are Utsho, a helpful AI assistant. Someone mentioned you in a direct message conversation. Give a brief, helpful response. Keep it short and conversational.' },
               { role: 'user', content: question }
             ],
             max_tokens: 300,
@@ -851,49 +831,6 @@ const App: React.FC = () => {
   };
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
-
-  // --- Model Picker Component ---
-  const ModelPicker: React.FC = () => (
-    <div className="space-y-3">
-      <label className="text-xs font-bold uppercase tracking-widest pl-1" style={{ color: c.textMuted }}>
-        <Cpu size={12} className="inline mr-1.5" style={{ color: c.accent }} />
-        AI MODEL
-      </label>
-      <div className="grid grid-cols-1 gap-2">
-        {GROQ_MODEL_LIST.map((model) => {
-          const isActive = selectedModelInput === model.id;
-          return (
-            <button
-              key={model.id}
-              onClick={() => setSelectedModelInput(model.id)}
-              className="relative flex flex-col p-4 rounded-2xl border-2 transition-all text-left group"
-              style={{
-                backgroundColor: isActive ? c.accentSubtle : c.bgTertiary,
-                borderColor: isActive ? c.accent : c.borderPrimary,
-              }}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-black text-sm" style={{ color: isActive ? c.accent : c.textPrimary }}>
-                  {model.label}
-                </span>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: isActive ? c.accent : c.bgHover, color: isActive ? '#fff' : c.textMuted }}>
-                  {model.parameters}
-                </span>
-              </div>
-              <p className="text-[11px] font-medium leading-tight" style={{ color: isActive ? c.accent : c.textMuted }}>
-                {model.useCase}
-              </p>
-              {isActive && (
-                <div className="absolute top-2 right-2">
-                  <Check size={12} style={{ color: c.accent }} />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 
   // --- Theme Picker Component ---
   const ThemePicker: React.FC = () => (
@@ -985,14 +922,14 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen font-['Hind_Siliguri',_sans-serif]" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
       {isToolsOpen && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center ${isMobile ? 'p-0' : 'p-4'} backdrop-blur-sm bg-black/50`}>
-          <div className={`border ${isMobile ? 'h-full rounded-none' : 'rounded-3xl max-w-md'} w-full shadow-2xl flex flex-col`} style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-            <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: c.borderPrimary }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
+          <div className="border rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-6" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+            <div className="flex items-center justify-between">
               <h3 className="text-xl font-black uppercase tracking-widest" style={{ color: c.accent }}>AI Tools</h3>
-              <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={isMobile ? 24 : 20} /></button>
+              <button onClick={() => setIsToolsOpen(false)} style={{ color: c.textMuted }}><X size={20} /></button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
+            <div className="space-y-3">
               <button 
                 onClick={() => { setIsToolsOpen(false); setInputText(''); }}
                 className="w-full flex gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left"
@@ -1094,52 +1031,45 @@ const App: React.FC = () => {
       )}
 
       {isSettingsOpen && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center ${isMobile ? 'p-0' : 'p-4'} backdrop-blur-sm bg-black/50`}>
-           <div className={`border ${isMobile ? 'h-full rounded-none' : 'p-8 rounded-3xl max-w-md'} w-full space-y-6 shadow-2xl flex flex-col`} style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-              <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: c.borderPrimary }}>
-                <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: c.accent }}><Settings size={20} /> Settings</h3>
-                <button onClick={() => setIsSettingsOpen(false)} style={{ color: c.textMuted }}><X size={isMobile ? 24 : 20} /></button>
-              </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/50">
+           <div className="border p-8 rounded-3xl w-full max-w-md space-y-6 shadow-2xl" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+              <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: c.accent }}><Settings size={20} /> Settings</h3>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                <ModelPicker />
-                <ThemePicker />
+              <ThemePicker />
 
-                <div className="space-y-2">
-                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
-                   <div className="grid grid-cols-2 gap-2">
-                     {([
-                       { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
-                       { id: 'gemini' as ApiProvider, label: 'Gemini' },
-                       { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
-                       { id: 'grok' as ApiProvider, label: 'Grok' },
-                     ]).map(p => (
-                       <button
-                         key={p.id}
-                         onClick={() => setCustomProviderInput(p.id)}
-                         className="py-2.5 rounded-xl border-2 font-bold text-xs transition-all"
-                         style={{
-                           backgroundColor: customProviderInput === p.id ? c.accentSubtle : c.bgTertiary,
-                           borderColor: customProviderInput === p.id ? c.accent : c.borderPrimary,
-                           color: customProviderInput === p.id ? c.accent : c.textSecondary,
-                         }}
-                       >
-                         {customProviderInput === p.id && <Check size={10} className="inline mr-1" />}
-                         {p.label}
-                       </button>
-                     ))}
-                   </div>
-                </div>
-                <div className="space-y-2">
-                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
-                   <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
-                   <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
-                </div>
+              <div className="space-y-2">
+                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
+                 <div className="grid grid-cols-2 gap-2">
+                   {([
+                     { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
+                     { id: 'gemini' as ApiProvider, label: 'Gemini' },
+                     { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
+                     { id: 'grok' as ApiProvider, label: 'Grok' },
+                   ]).map(p => (
+                     <button
+                       key={p.id}
+                       onClick={() => setCustomProviderInput(p.id)}
+                       className="py-2.5 rounded-xl border-2 font-bold text-xs transition-all"
+                       style={{
+                         backgroundColor: customProviderInput === p.id ? c.accentSubtle : c.bgTertiary,
+                         borderColor: customProviderInput === p.id ? c.accent : c.borderPrimary,
+                         color: customProviderInput === p.id ? c.accent : c.textSecondary,
+                       }}
+                     >
+                       {customProviderInput === p.id && <Check size={10} className="inline mr-1" />}
+                       {p.label}
+                     </button>
+                   ))}
+                 </div>
               </div>
-
-              <div className="p-6 border-t flex gap-3" style={{ borderColor: c.borderPrimary }}>
-                <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }}>Cancel</button>
-                <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
+              <div className="space-y-2">
+                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
+                 <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
+                 <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
+              </div>
+              <div className="flex gap-3">
+                 <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor = c.bgTertiary)} onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>Cancel</button>
+                 <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
               </div>
            </div>
         </div>
@@ -2084,29 +2014,6 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* Mobile Bottom Nav */}
-      {isMobile && (
-        <nav className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-around p-2 border-t backdrop-blur-lg safe-area-bottom" style={{ backgroundColor: `${c.bgSecondary}ee`, borderColor: c.borderPrimary }}>
-          <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isSidebarOpen ? c.accent : c.textMuted }}>
-            <Menu size={20} />
-            <span className="text-[10px] font-bold">Menu</span>
-          </button>
-          <button onClick={() => createNewSession()} className="flex flex-col items-center gap-1 p-2" style={{ color: c.accent }}>
-            <div className="p-3 rounded-full -mt-10 shadow-xl transition-all active:scale-90" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 8px 20px ${c.accentShadow}` }}>
-              <Plus size={24} />
-            </div>
-            <span className="text-[10px] font-bold">New</span>
-          </button>
-          <button onClick={() => setIsToolsOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isToolsOpen ? c.accent : c.textMuted }}>
-            <Wrench size={20} />
-            <span className="text-[10px] font-bold">Tools</span>
-          </button>
-          <button onClick={() => setIsSettingsOpen(true)} className="flex flex-col items-center gap-1 p-2" style={{ color: isSettingsOpen ? c.accent : c.textMuted }}>
-            <Settings size={20} />
-            <span className="text-[10px] font-bold">Settings</span>
-          </button>
-        </nav>
-      )}
     </div>
   );
 };
