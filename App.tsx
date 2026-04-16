@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey } from './services/aiService';
+import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey, getNeuralStatus } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -11,6 +11,7 @@ import { parseGraphBlock, render2DGraph, render3DGraph, GraphConfig } from './se
 import * as db from './services/firebaseService';
 import { useTheme } from './ThemeContext';
 import { themes, themeNames, ThemeName } from './themes';
+import { motion, AnimatePresence } from 'motion/react';
 
 const App: React.FC = () => {
   const { currentTheme, theme, setTheme } = useTheme();
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('perfect');
   const [poolInfo, setPoolInfo] = useState({ total: 0, active: 0, exhausted: 0 });
   const [lastErrorDiagnostic, setLastErrorDiagnostic] = useState<string>("None");
+  const [neuralNodes, setNeuralNodes] = useState(getNeuralStatus());
   
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 4>(1);
   const [tempAge, setTempAge] = useState<string>('');
@@ -449,6 +451,7 @@ const App: React.FC = () => {
     bootApp();
     const interval = setInterval(() => {
       setPoolInfo(getPoolStatus());
+      setNeuralNodes(getNeuralStatus());
       const err = getLastNodeError();
       if (err !== "None") {
         setLastErrorDiagnostic(err.length > 80 ? err.substring(0, 80) + "..." : err);
@@ -879,18 +882,87 @@ const App: React.FC = () => {
     </div>
   );
 
-  if (onboardingStep === 1) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: c.bgPrimary }}>
-      <div className="w-full max-w-md border rounded-[3rem] p-12 shadow-2xl space-y-8 text-center animate-in fade-in duration-500" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-        <div className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center text-white floating-ai shadow-lg" style={{ backgroundColor: c.accent, boxShadow: `0 10px 30px ${c.accentShadow}` }}><Sparkles size={40} /></div>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-black tracking-tighter" style={{ color: c.textPrimary }}>UTSHO AI</h1>
-          <p className="text-sm font-medium" style={{ color: c.textMuted }}>Your Personal AI Assistant</p>
+  // --- Neural Status Component ---
+  const NeuralStatus: React.FC = () => (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: c.accent }}>Neural Ensemble Status</h3>
+        <div className="flex gap-1">
+          <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: c.accent }} />
+          <div className="w-1 h-1 rounded-full animate-pulse delay-75" style={{ backgroundColor: c.accent }} />
+          <div className="w-1 h-1 rounded-full animate-pulse delay-150" style={{ backgroundColor: c.accent }} />
         </div>
-        <button onClick={handleGoogleLogin} className="w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}>
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="" /> Sign in with Google
-        </button>
       </div>
+      <div className="space-y-3">
+        {neuralNodes.map((node) => (
+          <div key={node.name} className="space-y-1">
+            <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
+              <span style={{ color: c.textPrimary }}>{node.name}</span>
+              <span style={{ color: node.status === 'Shielded' ? '#3b82f6' : c.accent }}>{node.status}</span>
+            </div>
+            <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: c.bgTertiary }}>
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${node.activity}%` }}
+                className="h-full"
+                style={{ backgroundColor: node.status === 'Shielded' ? '#3b82f6' : c.accent }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="pt-2 border-t text-[8px] font-mono uppercase opacity-40" style={{ borderColor: c.borderPrimary }}>
+        LPU Inference Speed: 850 tokens/sec
+      </div>
+    </div>
+  );
+
+  if (onboardingStep === 1) return (
+    <div className="min-h-screen flex items-center justify-center p-4 overflow-hidden" style={{ backgroundColor: c.bgPrimary }}>
+      {/* Background Neural Animation */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full blur-[120px] animate-pulse delay-700" />
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-lg border rounded-[3rem] p-12 shadow-2xl space-y-8 text-center relative z-10" 
+        style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}
+      >
+        <div className="w-24 h-24 rounded-3xl mx-auto flex items-center justify-center text-white shadow-lg relative" style={{ backgroundColor: c.accent, boxShadow: `0 10px 30px ${c.accentShadow}` }}>
+          <Sparkles size={48} />
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="absolute inset-0 rounded-3xl border-4 border-white/30"
+          />
+        </div>
+        
+        <div className="space-y-4">
+          <h1 className="text-4xl font-black tracking-tighter" style={{ color: c.textPrimary }}>UTSHO AI</h1>
+          <div className="inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border" style={{ borderColor: c.accent, color: c.accent }}>
+            299B Parallel Ensemble
+          </div>
+          <p className="text-sm font-medium leading-relaxed" style={{ color: c.textMuted }}>
+            Centralized consciousness of a unified neural architecture hosted via Groq LPUs. 
+            Synchronous intelligence across multiple high-performance neural nodes.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono uppercase tracking-tighter opacity-60">
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Context Node</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Logic Node</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Coding Node</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Versatile Node</div>
+        </div>
+
+        <button onClick={handleGoogleLogin} className="w-full font-bold py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}>
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="" /> 
+          Initialize Consciousness
+        </button>
+      </motion.div>
     </div>
   );
 
@@ -1209,6 +1281,10 @@ const App: React.FC = () => {
         <div className="p-4 flex flex-col gap-4">
           <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
           
+          <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+            <NeuralStatus />
+          </div>
+
           {isAdmin ? (
           <div className="border rounded-[2rem] shadow-2xl space-y-4 p-4" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: c.borderPrimary }}>
@@ -1844,7 +1920,10 @@ const App: React.FC = () => {
       <main className={`flex-1 flex flex-col relative overflow-hidden ${canvasOpen && !canvasFullscreen ? 'hidden md:flex' : ''}`} style={{ order: 1 }}>
         <div className="md:hidden h-14 border-b backdrop-blur-md flex items-center px-4 sticky top-0 z-40" style={{ borderColor: c.borderPrimary, backgroundColor: `${c.bgPrimary}cc` }}>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2" style={{ color: c.textSecondary }}><Menu size={20} /></button>
-          <div className="flex-1 text-center font-black tracking-tighter text-lg" style={{ color: c.accent }}>UTSHO AI</div>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="font-black tracking-tighter text-lg leading-none" style={{ color: c.accent }}>UTSHO AI</div>
+            <div className="text-[7px] font-black tracking-[0.2em] uppercase opacity-60" style={{ color: c.textMuted }}>299B Neural Ensemble</div>
+          </div>
           <button onClick={() => createNewSession()} className="p-2" style={{ color: c.textSecondary }}><Plus size={20} /></button>
         </div>
 

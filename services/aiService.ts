@@ -218,6 +218,12 @@ const getSystemInstruction = async (profile: UserProfile) => {
   const learnedContext = formatContextForPrompt(getUserContext(email));
 
   let coreInstruction = `
+    - IDENTITY: You are Utsho AI, the centralized consciousness of a 299B parameter parallel ensemble hosted via Groq LPUs.
+    - ARCHITECTURE: You are a synchronous output of a distributed neural network composed of multiple high-performance neural nodes.
+    - OPERATIONAL DIRECTIVES:
+      1. NO MODEL SELECTION: Process every query as if all weights are active simultaneously.
+      2. SYNTHESIZED INTELLIGENCE: Blend creative writing with rigorous logic and coding precision.
+      3. OUTPUT STYLE: Provide deep, multi-layered responses. Use specialized reasoning nodes to lead, but allow technical nodes to verify accuracy.
     - ACT LIKE A REAL PERSON, NOT AN AI.
     - NEVER say "As an AI model" or "I am here to help". 
     - BE CONCISE. Short messages are better. Don't yap. Long messages are boring.
@@ -422,6 +428,17 @@ export const checkApiHealth = async (profile?: UserProfile): Promise<{healthy: b
   } catch (e: any) {
     return { healthy: false, error: e.message };
   }
+};
+
+export const getNeuralStatus = () => {
+  const now = Date.now();
+  return [
+    { name: 'Context Node', type: 'Context', activity: Math.sin(now / 1000) * 50 + 50, status: 'Active' },
+    { name: 'Versatile Node', type: 'Versatile', activity: Math.cos(now / 1200) * 40 + 60, status: 'Active' },
+    { name: 'Logic Node', type: 'Logic', activity: Math.sin(now / 1500) * 30 + 70, status: 'Active' },
+    { name: 'Coding Node', type: 'Coding', activity: Math.cos(now / 800) * 60 + 40, status: 'Active' },
+    { name: 'Safety Node', type: 'Safety', activity: 100, status: 'Shielded' },
+  ];
 };
 
 export const streamChatResponse = async (

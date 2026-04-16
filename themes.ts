@@ -1,5 +1,5 @@
 
-export type ThemeName = 'midnight' | 'daylight' | 'ocean' | 'forest' | 'sunset' | 'rose' | 'chameleon';
+export type ThemeName = 'midnight' | 'daylight' | 'ocean' | 'forest' | 'sunset' | 'rose' | 'chameleon' | 'neural';
 
 export interface ThemeColors {
   // Backgrounds
@@ -305,9 +305,44 @@ export const themes: Record<ThemeName, Theme> = {
       buttonSecondaryText: '#a1a1aa',
     },
   },
+  neural: {
+    name: 'neural',
+    label: 'Neural',
+    emoji: '🧠',
+    colors: {
+      bgPrimary: '#050505',
+      bgSecondary: '#0a0a0a',
+      bgTertiary: '#111111',
+      bgInput: '#0f0f0f',
+      bgHover: 'rgba(0,255,100,0.05)',
+      borderPrimary: '#1a1a1a',
+      borderSecondary: '#2a2a2a',
+      borderFocus: 'rgba(0,255,100,0.3)',
+      textPrimary: '#ffffff',
+      textSecondary: '#a0a0a0',
+      textMuted: '#505050',
+      textInverse: '#000000',
+      accent: '#00ff66',
+      accentHover: '#00cc55',
+      accentShadow: 'rgba(0,255,100,0.2)',
+      accentSubtle: 'rgba(0,255,100,0.05)',
+      userBubble: '#00ff66',
+      userBubbleShadow: 'rgba(0,255,100,0.1)',
+      botBubble: '#0a0a0a',
+      botBubbleBorder: '#1a1a1a',
+      statusBar: 'rgba(0,255,100,0.05)',
+      statusBarText: '#00ff66',
+      scrollThumb: '#1a1a1a',
+      scrollThumbHover: '#2a2a2a',
+      buttonPrimary: '#00ff66',
+      buttonPrimaryText: '#000000',
+      buttonSecondary: '#1a1a1a',
+      buttonSecondaryText: '#00ff66',
+    },
+  },
 };
 
-export const themeNames: ThemeName[] = ['midnight', 'daylight', 'ocean', 'forest', 'sunset', 'rose', 'chameleon'];
+export const themeNames: ThemeName[] = ['midnight', 'daylight', 'ocean', 'forest', 'sunset', 'rose', 'chameleon', 'neural'];
 
 let chameleonInterval: any = null;
 
