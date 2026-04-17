@@ -58,6 +58,7 @@ export function evaluateExpression(expr: string, vars: Record<string, number>): 
     .replace(/\u00B3/g, '^3')
     .replace(/\u221A/g, 'sqrt')
     .replace(/\u03C0/g, 'pi')
+    .replace(/±|\\pm/g, '+') // Safety fallback
     // Implicit multiplication: 2x -> 2*x, x(... -> x*(, )(... -> )*(
     .replace(/(\d)([a-zA-Z(])/g, '$1*$2')
     .replace(/\)(\(|[a-zA-Z\d])/g, ')*$1');
@@ -124,7 +125,11 @@ export function evaluateExpression(expr: string, vars: Record<string, number>): 
     // Number
     if (/\d|\./.test(peek())) {
       let numStr = '';
-      while (/[\d.]/.test(peek())) numStr += consume();
+      while (/[\d.eE]/.test(peek())) numStr += consume();
+      if ((numStr.endsWith('e') || numStr.endsWith('E')) && (peek() === '-' || peek() === '+')) {
+        numStr += consume();
+        while (/\d/.test(peek())) numStr += consume();
+      }
       return parseFloat(numStr);
     }
 
@@ -216,15 +221,19 @@ export function parseGraphBlock(content: string): GraphConfig {
       continue;
     }
 
-    // Range line
-    if (/^range\s*:/i.test(line)) {
-      const rangeStr = line.replace(/^range\s*:\s*/i, '');
-      const xMatch = rangeStr.match(/x\s*\[\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\]/);
-      const yMatch = rangeStr.match(/y\s*\[\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\]/);
-      const zMatch = rangeStr.match(/z\s*\[\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\]/);
-      if (xMatch) xRange = [parseFloat(xMatch[1]), parseFloat(xMatch[2])];
-      if (yMatch) yRange = [parseFloat(yMatch[1]), parseFloat(yMatch[2])];
-      if (zMatch) zRange = [parseFloat(zMatch[1]), parseFloat(zMatch[2])];
+    // Range line (with or without 'range:' prefix)
+    const rangeRegex = /([xyz])\s*\[\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\]/gi;
+    let rangeMatch;
+    let foundRange = false;
+    while ((rangeMatch = rangeRegex.exec(line)) !== null) {
+      const axis = rangeMatch[1].toLowerCase();
+      const val: [number, number] = [parseFloat(rangeMatch[2]), parseFloat(rangeMatch[3])];
+      if (axis === 'x') xRange = val;
+      else if (axis === 'y') yRange = val;
+      else if (axis === 'z') zRange = val;
+      foundRange = true;
+    }
+    if (foundRange && (line.toLowerCase().startsWith('range:') || line.match(/^[xyz]\s*\[/i))) {
       continue;
     }
 
@@ -245,6 +254,42 @@ export function parseGraphBlock(content: string): GraphConfig {
     if (labelSuffix) {
       label = labelSuffix[1].trim();
       exprStr = line.replace(/\|\s*"?[^"]*"?\s*$/, '').trim();
+    }
+
+    // Handle plus-minus symbol by splitting into two expressions
+    if (exprStr.includes('±') || exprStr.includes('\\pm')) {
+      const parts = [
+        exprStr.replace(/±|\\pm/g, '+'),
+        exprStr.replace(/±|\\pm/g, '-')
+      ];
+      parts.forEach(p => {
+        let currentType = exprType;
+        let currentExpr = p;
+        
+        // y = ... form
+        const yMatch = currentExpr.match(/^y\s*=\s*(.+)/i);
+        if (yMatch) { currentExpr = yMatch[1].trim(); currentType = '2d'; }
+
+        // z = ... form (3D)
+        const zMatch = currentExpr.match(/^z\s*=\s*(.+)/i);
+        if (zMatch) { currentExpr = zMatch[1].trim(); currentType = '3d'; is3D = true; }
+
+        // r = ... form (polar)
+        const rMatch = currentExpr.match(/^r\s*=\s*(.+)/i);
+        if (rMatch) { currentExpr = rMatch[1].trim(); currentType = 'polar'; }
+
+        expressions.push({
+          id: `expr_${expressions.length}`,
+          raw: line,
+          expr: currentExpr,
+          color: GRAPH_COLORS[colorIdx % GRAPH_COLORS.length],
+          type: currentType as any,
+          label: label || line,
+          visible: true,
+        });
+      });
+      colorIdx++;
+      continue;
     }
 
     // y = ... form
@@ -311,7 +356,8 @@ export function render2DGraph(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const { width, height } = canvas;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
   const { xRange, yRange, expressions, gridEnabled } = config;
 
   // Apply zoom and pan
@@ -503,7 +549,8 @@ export function render3DGraph(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const { width, height } = canvas;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
   const { xRange, yRange, zRange = [-5, 5], expressions } = config;
 
   ctx.fillStyle = colors.bg;
@@ -511,7 +558,7 @@ export function render3DGraph(
 
   const cx = width / 2;
   const cy = height / 2;
-  const scale = Math.min(width, height) / 5 * zoomLevel;
+  const scale = Math.min(width, height) / 3.5 * zoomLevel;
 
   const cosA = Math.cos(rotation.angleX);
   const sinA = Math.sin(rotation.angleX);

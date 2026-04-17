@@ -182,7 +182,7 @@ const App: React.FC = () => {
     } else {
       render2DGraph(canvas, graphConfig, graphColors, graphPan, graphZoom);
     }
-  }, [canvasOpen, canvasActiveIndex, canvasBlocks, graphZoom, graphPan, graphRotation, c]);
+  }, [canvasOpen, canvasActiveIndex, canvasBlocks, graphZoom, graphPan, graphRotation, c, isSidebarOpen]);
 
   /** Copy canvas content to clipboard */
   const copyCanvasContent = (index: number) => {
