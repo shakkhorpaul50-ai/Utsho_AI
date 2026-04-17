@@ -440,11 +440,20 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Attempt to lock orientation to portrait on mobile
-    if (window.innerWidth < 768 && screen.orientation && (screen.orientation as any).lock) {
-      (screen.orientation as any).lock('portrait').catch(() => {
-        // Silently fail if not supported or allowed
-      });
-    }
+    const lockOrientation = () => {
+      if (window.innerWidth < 768 && screen.orientation && (screen.orientation as any).lock) {
+        (screen.orientation as any).lock('portrait').catch(() => {
+          // Silently fail if not supported or allowed without fullscreen
+        });
+      }
+    };
+
+    lockOrientation();
+    window.addEventListener('resize', lockOrientation);
+    document.addEventListener('touchstart', lockOrientation, { once: true });
+    return () => {
+      window.removeEventListener('resize', lockOrientation);
+    };
   }, []);
 
   useEffect(() => {
