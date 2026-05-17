@@ -97,6 +97,11 @@ const probeModels = async (apiKey: string): Promise<void> => {
  * Provider configuration for custom API keys.
  */
 const PROVIDER_CONFIG: Record<ApiProvider, { baseURL: string; model: string; visionModel?: string }> = {
+  pool: {
+    baseURL: _ep(),
+    model: _dm(),
+    visionModel: _vm(),
+  },
   chatgpt: {
     baseURL: "https://api.openai.com/v1",
     model: "gpt-4o",
@@ -109,8 +114,8 @@ const PROVIDER_CONFIG: Record<ApiProvider, { baseURL: string; model: string; vis
   },
   github: {
     baseURL: "https://models.inference.ai.azure.com",
-    model: "Llama-3.2-90B-Vision-Instruct",
-    visionModel: "Llama-3.2-90B-Vision-Instruct",
+    model: "gpt-4o-mini",
+    visionModel: "gpt-4o-mini",
   },
   deepseek: {
     baseURL: "https://api.deepseek.com",
@@ -177,8 +182,15 @@ export const getPoolStatus = () => {
 };
 
 export const getActiveKey = (profile?: UserProfile, triedKeys: string[] = []): string => {
-  const custom = (profile?.customApiKey || "").trim();
-  if (custom.length > 20 && !triedKeys.includes(custom)) return custom;
+  // If user explicitly selected a custom provider, return their custom key
+  if (profile?.customApiProvider && profile.customApiProvider !== 'pool') {
+    const key = (profile.customApiKey || "").trim();
+    // For self-hosted, we allow empty key (dummy)
+    if (profile.customApiProvider === 'selfhosted' && !key) return "ollama";
+    return key;
+  }
+
+  // Otherwise use community pool
   const allKeys = getPoolKeys();
   const availableKeys = allKeys.filter(k => !keyBlacklist.has(k) && !triedKeys.includes(k));
   if (availableKeys.length === 0) return "";
@@ -190,26 +202,25 @@ export const getActiveKey = (profile?: UserProfile, triedKeys: string[] = []): s
  * Creates an OpenAI client configured for the appropriate provider.
  */
 const createClient = (apiKey: string, profile?: UserProfile): { client: OpenAI; model: string; visionModel: string } => {
-  const isCustomKey = profile?.customApiKey?.trim() === apiKey;
-  
-  if (isCustomKey && profile?.customApiProvider) {
-    const config = PROVIDER_CONFIG[profile.customApiProvider];
-    const baseURL = (profile.customApiProvider === 'selfhosted' && profile.customBaseUrl) 
-      ? profile.customBaseUrl 
-      : config.baseURL;
-      
+  const provider = profile?.customApiProvider || 'pool';
+
+  if (provider === 'pool') {
     return {
-      client: new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true }),
-      model: config.model,
-      visionModel: config.visionModel || config.model,
+      client: new OpenAI({ apiKey, baseURL: _ep(), dangerouslyAllowBrowser: true }),
+      model: _dm(),
+      visionModel: _vm(),
     };
   }
-  
-  // Default pool configuration
+
+  const config = PROVIDER_CONFIG[provider];
+  const baseURL = (provider === 'selfhosted' && profile?.customBaseUrl) 
+    ? profile.customBaseUrl.trim()
+    : config.baseURL;
+    
   return {
-    client: new OpenAI({ apiKey, baseURL: _ep(), dangerouslyAllowBrowser: true }),
-    model: _dm(),
-    visionModel: _vm(),
+    client: new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true }),
+    model: config.model,
+    visionModel: config.visionModel || config.model,
   };
 };
 
@@ -518,7 +529,8 @@ export const streamChatResponse = async (
     const status = error.status || error.response?.status;
     
     // 429: Rate Limit, 401: Invalid Key, 404: Model Not Found
-    if (status === 429 || status === 401 || status === 404 || rawMsg.toLowerCase().includes("quota") || rawMsg.toLowerCase().includes("rate limit")) {
+    const isPool = !profile?.customApiProvider || profile.customApiProvider === 'pool';
+    if (isPool && (status === 429 || status === 401 || status === 404 || rawMsg.toLowerCase().includes("quota") || rawMsg.toLowerCase().includes("rate limit"))) {
       if (attempt < maxRetries) {
         console.warn(`AI_SERVICE: Key issue (Status: ${status}). Blacklisting and retrying...`);
         keyBlacklist.set(apiKey, Date.now() + RATE_LIMIT_DURATION);

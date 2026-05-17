@@ -1,7 +1,7 @@
 
 export type Role = 'user' | 'model';
 export type Gender = 'male' | 'female';
-export type ApiProvider = 'chatgpt' | 'gemini' | 'deepseek' | 'grok' | 'github' | 'selfhosted';
+export type ApiProvider = 'pool' | 'chatgpt' | 'gemini' | 'deepseek' | 'grok' | 'github' | 'selfhosted';
 
 export interface UserProfile {
   name: string;

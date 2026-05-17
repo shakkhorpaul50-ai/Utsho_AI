@@ -591,7 +591,12 @@ const App: React.FC = () => {
 
   const saveSettings = async () => {
     if (!userProfile) return;
-    const updated = { ...userProfile, customApiKey: customKeyInput.trim(), customApiProvider: customProviderInput, customBaseUrl: customBaseUrlInput.trim() };
+    const updated: UserProfile = { 
+      ...userProfile, 
+      customApiKey: (customKeyInput || "").trim(), 
+      customApiProvider: customProviderInput, 
+      customBaseUrl: (customBaseUrlInput || "").trim() 
+    };
     setUserProfile(updated);
     localStorage.setItem('utsho_profile', JSON.stringify(updated));
     if (db.isDatabaseEnabled()) await db.saveUserProfile(updated);
@@ -1183,9 +1188,10 @@ const App: React.FC = () => {
               <ThemePicker />
 
               <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
+                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI INFRASTRUCTURE</label>
                  <div className="grid grid-cols-3 gap-2">
                    {([
+                     { id: 'pool' as ApiProvider, label: 'Pool' },
                      { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
                      { id: 'gemini' as ApiProvider, label: 'Gemini' },
                      { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
