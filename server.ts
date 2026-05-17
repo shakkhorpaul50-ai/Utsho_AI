@@ -9,7 +9,8 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// CONFIGURATION: GROQ Keys Pool
+// CONFIGURATION: Gemini & GROQ Keys Pool
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const GROQ_KEYS = [
   process.env.GROQ_KEY_1,
   process.env.GROQ_KEY_2,
@@ -21,11 +22,37 @@ const GROQ_KEYS = [
 let currentKeyIndex = 0;
 
 /**
- * Round-Robin Load Balancer with Retry Logic
+ * Gemini Stream Handler
+ */
+async function streamGemini(messages: any[]): Promise<Response> {
+  if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY missing");
+
+  // Convert messages to Gemini format
+  const contents = messages.map(m => ({
+    role: m.role === 'system' ? 'user' : (m.role === 'assistant' ? 'model' : 'user'),
+    parts: [{ text: m.content }]
+  }));
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents, generationConfig: { temperature: 0.7, maxOutputTokens: 2048 } })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Gemini Error: ${text}`);
+  }
+
+  return response;
+}
+
+/**
+ * Round-Robin Load Balancer with Retry Logic for GROQ
  */
 async function fetchGroqWithRetry(body: any): Promise<Response> {
   if (GROQ_KEYS.length === 0) {
-    throw new Error("No GROQ API keys configured on server.");
+    throw new Error("No GROQ API keys configured.");
   }
 
   let lastError = null;
@@ -33,7 +60,6 @@ async function fetchGroqWithRetry(body: any): Promise<Response> {
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const apiKey = GROQ_KEYS[currentKeyIndex];
-    // Rotate index for next request
     currentKeyIndex = (currentKeyIndex + 1) % GROQ_KEYS.length;
 
     try {
@@ -43,58 +69,79 @@ async function fetchGroqWithRetry(body: any): Promise<Response> {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          ...body,
-          stream: true // Enforce streaming for this architecture
-        })
+        body: JSON.stringify({ ...body, stream: true })
       });
 
       if (response.status === 429 || response.status >= 500) {
-        const errorText = await response.text();
-        console.warn(`GROQ_POOL: Key ${currentKeyIndex} failed (Status ${response.status}). Retrying...`, errorText);
-        lastError = new Error(`Groq Status ${response.status}: ${errorText}`);
-        continue; // Try next key
+        lastError = new Error(`Groq Status ${response.status}`);
+        continue;
       }
 
       return response;
     } catch (err: any) {
-      console.error(`GROQ_POOL: Network error with key ${currentKeyIndex}. Retrying...`, err);
       lastError = err;
     }
   }
 
-  throw lastError || new Error("All Groq API keys in pool exhausted or failed.");
+  throw lastError || new Error("All Groq API keys failed.");
 }
 
 // API ROUTE: Proxied Chat with Failover Support
 app.post("/api/brain/chat", async (req: express.Request, res: express.Response) => {
   try {
-    const { messages, model = "llama-3.3-70b-versatile" } = req.body;
+    const { messages } = req.body;
     
+    // Try Gemini First (Fastest in this environment)
+    if (GEMINI_KEY) {
+      try {
+        const geminiResponse = await streamGemini(messages);
+        res.setHeader("Content-Type", "text/event-stream");
+        if (!geminiResponse.body) throw new Error("No Gemini body");
+        
+        const reader = geminiResponse.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                if (content) {
+                  res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+                }
+              } catch(e) {}
+            }
+          }
+        }
+        res.end();
+        return;
+      } catch (geminiErr) {
+        console.warn("CLOUD_BRAIN: Gemini failed, trying Groq fallback...", geminiErr);
+      }
+    }
+
+    // Try Groq Second
     const groqResponse = await fetchGroqWithRetry({
-      model,
+      model: "llama-3.3-70b-versatile",
       messages,
       temperature: 0.7,
       max_tokens: 2048,
     });
 
-    // Proxy the stream
     res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    if (!groqResponse.body) throw new Error("No response body from Groq");
-    
+    if (!groqResponse.body) throw new Error("No Groq body");
     const reader = groqResponse.body.getReader();
-    const decoder = new TextDecoder();
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       res.write(value);
     }
-    
     res.end();
+
   } catch (err: any) {
     console.error("SERVER_ERROR:", err.message);
     res.status(500).json({ 
