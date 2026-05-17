@@ -1209,8 +1209,13 @@ const App: React.FC = () => {
                    ))}
                  </div>
                  <p className="text-[10px] mt-1.5 italic" style={{ color: c.textMuted }}>
-                   Tip: Use <span className="font-bold" style={{ color: c.accent }}>Private</span> for Llama 3.2 on your own virtual GPU (Ollama).
+                   Tip: Use <span className="font-bold" style={{ color: c.accent }}>Private</span> for Ollama (Colab) or <span className="font-bold" style={{ color: c.accent }}>GitHub</span> for a permanent free setup.
                  </p>
+                 {customProviderInput === 'github' && (
+                   <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: c.accent }}>
+                     Get your GitHub Token here →
+                   </a>
+                 )}
               </div>
               <div className="space-y-2">
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
