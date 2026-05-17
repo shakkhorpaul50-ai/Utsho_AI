@@ -1,6 +1,6 @@
 {
-  "name": "Utsho-AI",
-  "description": "Utsho AI - A high-performance assistant with Dual-Engine (Brain + Knowledge) architecture and custom tuned model support.",
+  "name": "Utsho-AI (Native Brain)",
+  "description": "Utsho AI - A high-performance assistant with a 100% Native Brain running locally in the browser via WebGPU.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

@@ -118,15 +118,10 @@ export const saveUserProfile = async (profile: UserProfile) => {
     age: profile.age,
     picture: profile.picture,
     googleId: profile.googleId || '',
-    customApiKey: profile.customApiKey || '',
-    customApiProvider: profile.customApiProvider || 'chatgpt',
-    customBaseUrl: profile.customBaseUrl || '',
-    tunedModelId: profile.tunedModelId || '',
-    googleSearchEnabled: profile.googleSearchEnabled ?? true,
     emotionalMemory: profile.emotionalMemory || '',
     preferredLanguage: profile.preferredLanguage || ''
   }, { merge: true });
-};
+}
 
 export const updateUserLanguage = async (email: string, language: string) => {
   if (!db || !email) return;

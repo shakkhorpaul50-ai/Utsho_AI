@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
-import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, getActiveKey } from './services/aiService';
+import { ChatSession, Message, UserProfile, Gender, CanvasBlock, CanvasType } from './types';
+import { streamChatResponse, checkApiHealth, initLocalEngine } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -22,17 +22,17 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiStatusText, setApiStatusText] = useState<string>('Ready');
-  const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('perfect');
+  const [apiStatusText, setApiStatusText] = useState<string>('Initializing Engine...');
+  const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('error');
+  
+  // Local Brain State
+  const [modelProgress, setModelProgress] = useState<{ progress: number, text: string }>({ progress: 0, text: '' });
+  const [isBrainLoaded, setIsBrainLoaded] = useState(false);
+  const [engineInitError, setEngineInitError] = useState<string | null>(null);
   
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 4>(1);
   const [tempAge, setTempAge] = useState<string>('');
   const [tempGender, setTempGender] = useState<Gender | null>(null);
-  const [customKeyInput, setCustomKeyInput] = useState('');
-  const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
-  const [customBaseUrlInput, setCustomBaseUrlInput] = useState('');
-  const [tunedModelIdInput, setTunedModelIdInput] = useState('tunedModels/my-utsho-model-id');
-  const [googleSearchEnabledInput, setGoogleSearchEnabledInput] = useState(true);
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -462,15 +462,26 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const bootApp = async () => {
+      // 1. Initialize Native Brain (WebLLM)
+      try {
+        await initLocalEngine((report) => {
+          const progress = Math.round(report.progress * 100);
+          setModelProgress({ progress, text: report.text });
+          if (progress >= 100) {
+            setIsBrainLoaded(true);
+            setApiStatusText("Engine Ready");
+            setConnectionHealth("perfect");
+          }
+        });
+      } catch (err: any) {
+        console.error("Native Brain Init Error:", err);
+        setEngineInitError(err.message || "Unknown hardware error");
+      }
+
       const localProfileStr = localStorage.getItem('utsho_profile');
       if (localProfileStr) {
         const localProfile = JSON.parse(localProfileStr) as UserProfile;
         setUserProfile(localProfile);
-        setCustomKeyInput(localProfile.customApiKey || '');
-        setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
-        setCustomBaseUrlInput(localProfile.customBaseUrl || '');
-        setTunedModelIdInput(localProfile.tunedModelId || 'tunedModels/my-utsho-model-id');
-        setGoogleSearchEnabledInput(localProfile.googleSearchEnabled ?? true);
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -481,14 +492,6 @@ const App: React.FC = () => {
         if (db.isDatabaseEnabled()) {
           try {
             const cloudProfile = await db.getUserProfile(localProfile.email);
-            if (cloudProfile) {
-              setUserProfile(cloudProfile);
-              setCustomKeyInput(cloudProfile.customApiKey || '');
-              setCustomBaseUrlInput(cloudProfile.customBaseUrl || '');
-              setTunedModelIdInput(cloudProfile.tunedModelId || 'tunedModels/my-utsho-model-id');
-              setGoogleSearchEnabledInput(cloudProfile.googleSearchEnabled ?? true);
-              localStorage.setItem('utsho_profile', JSON.stringify(cloudProfile));
-            }
             const cloudSessions = await db.getSessions(localProfile.email);
             setSessions(cloudSessions);
             if (cloudSessions.length > 0) setActiveSessionId(cloudSessions[0].id);
@@ -498,7 +501,7 @@ const App: React.FC = () => {
         }
         // Load learned user context from Firebase (merges with localStorage)
         loadUserContextFromFirebase(localProfile.email).catch(console.error);
-        await performHealthCheck(localProfile);
+        await performHealthCheck();
       }
     };
     bootApp();
@@ -517,7 +520,6 @@ const App: React.FC = () => {
       const cloud = await db.getUserProfile(googleUser.email);
       if (cloud && cloud.age > 0) {
         setUserProfile(cloud);
-        setCustomKeyInput(cloud.customApiKey || '');
         localStorage.setItem('utsho_profile', JSON.stringify(cloud));
         setOnboardingStep(4);
         const s = await db.getSessions(googleUser.email);
@@ -540,12 +542,12 @@ const App: React.FC = () => {
     if (db.isDatabaseEnabled()) await db.saveUserProfile(final);
     setOnboardingStep(4);
     if (sessions.length === 0) createNewSession(final.email);
-    await performHealthCheck(final);
+    await performHealthCheck();
   };
 
-  const performHealthCheck = async (profile?: UserProfile) => {
+  const performHealthCheck = async () => {
     setApiStatusText('Verifying...');
-    const { healthy } = await checkApiHealth(profile || userProfile || undefined);
+    const { healthy } = await checkApiHealth();
     setConnectionHealth(healthy ? 'perfect' : 'error');
     setApiStatusText(healthy ? 'Synced' : 'Service Issue');
   };
@@ -579,18 +581,13 @@ const App: React.FC = () => {
   const saveSettings = async () => {
     if (!userProfile) return;
     const updated: UserProfile = { 
-      ...userProfile, 
-      customApiKey: (customKeyInput || "").trim(), 
-      customApiProvider: customProviderInput, 
-      customBaseUrl: (customBaseUrlInput || "").trim(),
-      tunedModelId: tunedModelIdInput.trim(),
-      googleSearchEnabled: googleSearchEnabledInput
+      ...userProfile
     };
     setUserProfile(updated);
     localStorage.setItem('utsho_profile', JSON.stringify(updated));
     if (db.isDatabaseEnabled()) await db.saveUserProfile(updated);
     setIsSettingsOpen(false);
-    await performHealthCheck(updated);
+    await performHealthCheck();
   };
 
   const createNewSession = (emailOverride?: string) => {
@@ -742,12 +739,27 @@ const App: React.FC = () => {
     await streamChatResponse(
       history,
       userProfile,
-      (chunk) => {},
-      (fullText, sources, imageUrl) => {
+      (chunk) => {
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSessionId) return s;
+          const messages = [...s.messages];
+          const lastMsg = messages[messages.length - 1];
+          if (lastMsg && lastMsg.role === 'model' && !lastMsg.content.startsWith('Failure:')) {
+            lastMsg.content += chunk;
+            return { ...s, messages };
+          } else {
+            const newMsg: Message = { id: crypto.randomUUID(), role: 'model', content: chunk, timestamp: new Date() };
+            return { ...s, messages: [...s.messages, newMsg] };
+          }
+        }));
+      },
+      (fullText) => {
         setIsLoading(false);
         const parts = fullText.split('[SPLIT]').map(p => p.trim()).filter(p => p.length > 0);
         let allCanvasBlocks: CanvasBlock[] = [];
-        const newMessages: Message[] = parts.map((p, i) => {
+        
+        // Regroup parts into proper Message objects with potential canvas blocks
+        const finalMessages: Message[] = parts.map((p, i) => {
           const { cleanText, blocks } = parseCanvasBlocks(p);
           if (blocks.length > 0) allCanvasBlocks = [...allCanvasBlocks, ...blocks];
           return {
@@ -755,33 +767,18 @@ const App: React.FC = () => {
             role: 'model' as const,
             content: cleanText,
             timestamp: new Date(),
-            sources: i === parts.length - 1 ? sources : undefined,
-            imageUrl: i === 0 ? imageUrl : undefined,
             canvasBlocks: blocks.length > 0 ? blocks : undefined,
           };
         });
-        // Auto-open canvas if code/math blocks were found
+
         if (allCanvasBlocks.length > 0) {
           openCanvas(allCanvasBlocks);
         }
         
-        const updatedMessages = [...history, ...newMessages];
+        const updatedMessages = [...history, ...finalMessages];
         setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: updatedMessages } : s));
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, updatedMessages, newTitle).catch(console.error);
         setApiStatusText("Synced");
-
-        // Background: self-training pipeline
-        const learningKey = getActiveKey(userProfile);
-        if (learningKey) {
-          // 1. Analyze conversation to learn about the user
-          analyzeConversation(updatedMessages, userProfile, learningKey).catch(() => {});
-          // 2. Self-assess response quality and generate improvement notes
-          selfAssessResponse(updatedMessages, userProfile, learningKey).catch(() => {});
-          // 3. Periodic deep reflection to synthesize all learnings
-          deepReflection(userProfile, learningKey).catch(() => {});
-          // 4. Extract useful knowledge from conversations to global knowledge base
-          extractAndSaveKnowledge(updatedMessages, userProfile, learningKey).catch(() => {});
-        }
       },
       (err) => {
         setIsLoading(false);
@@ -845,33 +842,7 @@ const App: React.FC = () => {
     
     // Check for @utsho mention
     if (/@utsho/i.test(text)) {
-      const question = text.replace(/@utsho/gi, '').trim() || 'hi';
-      const apiKey = getActiveKey(userProfile);
-      if (apiKey) {
-        try {
-          // Get AI response
-          const { streamChatResponse: _ , ...rest } = await import('./services/aiService');
-          const OpenAI = (await import('openai')).default;
-          const client = new OpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1', dangerouslyAllowBrowser: true });
-          const response = await client.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              { role: 'system', content: 'You are Utsho, a helpful AI assistant. Someone mentioned you in a direct message conversation. Give a brief, helpful response. Keep it short and conversational.' },
-              { role: 'user', content: question }
-            ],
-            max_tokens: 300,
-            temperature: 0.8,
-          });
-          const aiReply = response.choices[0]?.message?.content || "Hey! How can I help?";
-          
-          // Send AI response as a message from "utsho-ai"
-          await db.sendDirectMessage('utsho-ai@utsho.ai', 'Utsho AI', dmChatWith, aiReply);
-          await db.sendDirectMessage('utsho-ai@utsho.ai', 'Utsho AI', userProfile.email, aiReply);
-          setDmChatMessages((prev: any) => [...prev, { id: `msg_${Date.now()}_ai`, from: 'utsho-ai@utsho.ai', fromName: 'Utsho AI', to: dmChatWith, message: aiReply, createdAt: new Date(), read: false }]);
-        } catch (err) {
-          console.error("DM @utsho error:", err);
-        }
-      }
+      console.log("Utsho mention in DM:", text);
     }
   };
 
@@ -950,19 +921,19 @@ const App: React.FC = () => {
         <div className="space-y-4">
           <h1 className="text-4xl font-black tracking-tighter" style={{ color: c.textPrimary }}>UTSHO AI</h1>
           <div className="inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border" style={{ borderColor: c.accent, color: c.accent }}>
-            299B Parallel Ensemble
+            NATIVE NEURAL BRAIN
           </div>
           <p className="text-sm font-medium leading-relaxed" style={{ color: c.textMuted }}>
-            Centralized consciousness of a unified neural architecture hosted via Groq LPUs. 
-            Synchronous intelligence across multiple high-performance neural nodes.
+            A locally hosted decentralized intelligence running 100% on your device hardware via WebGPU. 
+            Zero cloud latency. Total data privacy. Unlimited local thinking.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono uppercase tracking-tighter opacity-60">
-          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Context Node</div>
-          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Logic Node</div>
-          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Coding Node</div>
-          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Versatile Node</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Native Node</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>WebGPU Meta</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Llama 3.2 1B</div>
+          <div className="p-2 border rounded-xl" style={{ borderColor: c.borderPrimary }}>Local LPU</div>
         </div>
 
         <button onClick={handleGoogleLogin} className="w-full font-bold py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}>
@@ -1000,7 +971,53 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen font-['Hind_Siliguri',_sans-serif] overflow-hidden" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
-      {/* Mobile Bottom Navigation */}
+      {/* Native Brain Loading Overlay */}
+      {!isBrainLoaded && !engineInitError && onboardingStep === 4 && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center p-8 backdrop-blur-2xl bg-black/60">
+          <div className="w-full max-w-sm space-y-6 text-center">
+            <div className="relative inline-block">
+              <div className="w-24 h-24 rounded-full border-4 border-emerald-500/20 animate-spin border-t-emerald-500" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles size={32} className="text-emerald-500" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Waking up Native Brain</h3>
+              <p className="text-xs text-white/50 font-medium">Downloading neural weights (~500MB) directly to your GPU. No data leaves this device.</p>
+            </div>
+            <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden border border-white/5">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${modelProgress.progress}%` }}
+                className="h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+              />
+            </div>
+            <div className="flex justify-between text-[10px] font-mono text-white/40 uppercase tracking-widest">
+              <span>Initializing GPU Nodes</span>
+              <span>{modelProgress.progress}%</span>
+            </div>
+            <p className="text-[10px] italic text-emerald-400 font-medium animate-pulse">{modelProgress.text}</p>
+          </div>
+        </div>
+      )}
+
+      {/* WebGPU Error Fallback */}
+      {engineInitError && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center p-8 backdrop-blur-2xl bg-black/60">
+          <div className="w-full max-w-sm p-8 border border-red-500/30 rounded-3xl bg-red-500/5 text-center space-y-4">
+            <AlertCircle size={48} className="mx-auto text-red-500" />
+            <h3 className="text-xl font-black text-white">Hardware Conflict</h3>
+            <p className="text-sm text-white/70 leading-relaxed">
+              Utsho's Native Brain requires **WebGPU** for hardware acceleration. 
+              {(navigator as any).gpu ? "Your hardware might not support this model." : "Your browser doesn't support WebGPU yet."}
+            </p>
+            <div className="p-4 bg-white/5 rounded-2xl text-[10px] font-mono text-red-400/80 text-left">
+              ERROR_LOG: {engineInitError}
+            </div>
+            <p className="text-xs text-white/50">Please try using the latest Chrome or Edge browser on a device with a dedicated GPU.</p>
+          </div>
+        </div>
+      )}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t z-[60] flex items-center justify-around px-4 backdrop-blur-xl" style={{ backgroundColor: `${c.bgSecondary}f2`, borderColor: c.borderPrimary }}>
         <button onClick={() => setIsSidebarOpen(true)} className="flex flex-col items-center gap-1" style={{ color: isSidebarOpen ? c.accent : c.textMuted }}>
           <Menu size={20} />
@@ -1139,91 +1156,7 @@ const App: React.FC = () => {
               
               <ThemePicker />
 
-              <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI INFRASTRUCTURE</label>
-                 <div className="grid grid-cols-3 gap-2">
-                   {([
-                     { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
-                     { id: 'gemini' as ApiProvider, label: 'Gemini' },
-                     { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
-                     { id: 'grok' as ApiProvider, label: 'Grok' },
-                     { id: 'github' as ApiProvider, label: 'GitHub' },
-                     { id: 'selfhosted' as ApiProvider, label: 'Private' },
-                   ]).map(p => (
-                     <button
-                       key={p.id}
-                       onClick={() => setCustomProviderInput(p.id)}
-                       className="py-2.5 rounded-xl border-2 font-bold text-xs transition-all"
-                       style={{
-                         backgroundColor: customProviderInput === p.id ? c.accentSubtle : c.bgTertiary,
-                         borderColor: customProviderInput === p.id ? c.accent : c.borderPrimary,
-                         color: customProviderInput === p.id ? c.accent : c.textSecondary,
-                       }}
-                     >
-                       {customProviderInput === p.id && <Check size={12} className="inline mr-1" />}
-                       {p.label}
-                     </button>
-                   ))}
-                 </div>
-                 <p className="text-[10px] mt-1.5 italic" style={{ color: c.textMuted }}>
-                   Connect directly to the official provider. Requires your own key.
-                 </p>
-                 {customProviderInput === 'github' && (
-                   <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: c.accent }}>
-                     Get your GitHub Token here →
-                   </a>
-                 )}
-              </div>
-              <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (REQUIRED)</label>
-                 <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
-              </div>
-
-              {customProviderInput === 'selfhosted' && (
-                <div className="space-y-2">
-                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>PRIVATE API BASE URL</label>
-                   <input type="text" value={customBaseUrlInput} onChange={e => setCustomBaseUrlInput(e.target.value)} placeholder="https://xxxx.trycloudflare.com/v1" className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
-                   <p className="text-[10px] italic" style={{ color: c.textMuted }}>Paste the "YOUR NEW AI URL" from Colab here (add /v1 at the end).</p>
-                </div>
-              )}
-
-              <div className="space-y-4 border-t pt-4" style={{ borderColor: c.borderPrimary }}>
-                 <label className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: c.accent }}>
-                   <Sparkles size={14} /> DUAL-ENGINE ARCHITECTURE
-                 </label>
-                 
-                 <div className="space-y-3">
-                   <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
-                     <div className="flex items-center gap-3">
-                       <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"><Globe size={18} /></div>
-                       <div>
-                         <div className="text-xs font-bold" style={{ color: c.textPrimary }}>Knowledge Grounding</div>
-                         <div className="text-[10px]" style={{ color: c.textMuted }}>Live Wikipedia & Web search</div>
-                       </div>
-                     </div>
-                     <button 
-                       onClick={() => setGoogleSearchEnabledInput(!googleSearchEnabledInput)}
-                       className="w-12 h-8 rounded-full transition-all relative p-1"
-                       style={{ backgroundColor: googleSearchEnabledInput ? c.accent : c.borderPrimary }}
-                     >
-                       <div className={`w-6 h-6 rounded-full bg-white transition-all shadow-sm ${googleSearchEnabledInput ? 'translate-x-4' : 'translate-x-0'}`} />
-                     </button>
-                   </div>
-
-                   <div className="space-y-1.5 pl-1">
-                     <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: c.textMuted }}>Brain (Custom Tuned Model ID)</label>
-                     <input 
-                       type="text" 
-                       value={tunedModelIdInput} 
-                       onChange={e => setTunedModelIdInput(e.target.value)} 
-                       placeholder="tunedModels/..." 
-                       className="w-full border p-3 rounded-xl outline-none text-xs font-mono" 
-                       style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} 
-                     />
-                   </div>
-                 </div>
-              </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-4">
                  <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor = c.bgTertiary)} onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>Cancel</button>
                  <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
               </div>

@@ -1,7 +1,5 @@
-
 export type Role = 'user' | 'model';
 export type Gender = 'male' | 'female';
-export type ApiProvider = 'chatgpt' | 'gemini' | 'deepseek' | 'grok' | 'github' | 'selfhosted';
 
 export interface UserProfile {
   name: string;
@@ -10,13 +8,8 @@ export interface UserProfile {
   gender: Gender;
   age: number;
   googleId?: string;
-  customApiKey?: string;
-  customApiProvider?: ApiProvider;
-  customBaseUrl?: string;
   emotionalMemory?: string; 
   preferredLanguage?: string;
-  tunedModelId?: string;
-  googleSearchEnabled?: boolean;
 }
 
 export type CanvasType = 'code' | 'math' | 'explain' | 'word' | 'graph';
@@ -25,7 +18,7 @@ export interface CanvasBlock {
   type: CanvasType;
   content: string;
   language?: string; // e.g. 'python', 'javascript', etc.
-  title?: string;    // e.g. 'S-code: Python', 'S-math: Solution', or 'S-explain: Analysis'
+  title?: string;    // e.g. 'S-code: Python', 'S-math: Solution'
 }
 
 export interface Message {
