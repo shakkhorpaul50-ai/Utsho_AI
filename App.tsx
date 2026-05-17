@@ -470,21 +470,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const bootApp = async () => {
-      // 1. Initialize Native Brain (WebLLM)
-      try {
-        await initLocalEngine((report) => {
-          const progress = Math.round(report.progress * 100);
-          setModelProgress({ progress, text: report.text });
-          if (progress >= 100) {
-            setIsBrainLoaded(true);
-            setApiStatusText("Engine Ready");
-            setConnectionHealth("perfect");
-          }
-        });
-      } catch (err: any) {
-        console.error("Native Brain Init Error:", err);
-        setEngineInitError(err.message || "Unknown hardware error");
-      }
+      // 1. Initialize Cloud Engine
+      initLocalEngine();
 
       const localProfileStr = localStorage.getItem('utsho_profile');
       if (localProfileStr) {
@@ -748,7 +735,6 @@ const App: React.FC = () => {
       history,
       userProfile,
       (chunk) => {
-        setCurrentBrainMode(getBrainStatus());
         setSessions(prev => prev.map(s => {
           if (s.id !== activeSessionId) return s;
           const messages = [...s.messages];
@@ -789,8 +775,8 @@ const App: React.FC = () => {
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, updatedMessages, newTitle).catch(console.error);
         setApiStatusText("Synced");
 
-        // Background: Extract and save potential life facts using the local engine 
-        extractAndSaveLocalMemory(updatedMessages, userProfile).catch(() => {});
+        // Background: Memories
+        extractAndSaveLocalMemory();
       },
       (err) => {
         setIsLoading(false);
@@ -803,7 +789,6 @@ const App: React.FC = () => {
       },
       (status) => {
         setApiStatusText(status);
-        setCurrentBrainMode(getBrainStatus());
       }
     );
   };
@@ -1314,16 +1299,10 @@ const App: React.FC = () => {
           <div className="p-4 flex flex-col gap-4">
             <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
             
-            <div className="border rounded-2xl p-3 space-y-2" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+            <div className="border rounded-2xl p-3" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
                <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar, padding: '4px 12px' }}>
                  {connectionHealth === 'error' ? 'DISCONNECTED' : 'ONLINE'} {isLoading && "..."}
                </div>
-               {isBrainLoaded && (
-                 <div className="flex items-center justify-center gap-2 py-1 px-3 rounded-lg border text-[8px] font-black uppercase tracking-widest" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary, color: currentBrainMode === 'cloud' ? c.accent : '#10b981' }}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${currentBrainMode === 'cloud' ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
-                    BRAIN: {currentBrainMode === 'cloud' ? 'CLOUD POOL' : 'NATIVE GPU'}
-                 </div>
-               )}
             </div>
             
             <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>

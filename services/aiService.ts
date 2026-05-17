@@ -2,35 +2,26 @@ import { Message, UserProfile } from "../types";
 import * as db from "./firebaseService";
 import { getUserContext, formatContextForPrompt } from "./userLearningService";
 import { formatForSystemPrompt as getAdminContext } from "./adminCommandService";
-import { CreateMLCEngine, MLCEngine, InitProgressReport } from "@mlc-ai/web-llm";
 
-// Constants for local model
-const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-let engine: MLCEngine | null = null;
+// Cloud-only State
+let activeAbortController: AbortController | null = null;
 
-// Initialize Web-LLM Engine
-export const initLocalEngine = async (onProgress: (report: InitProgressReport) => void): Promise<void> => {
-  if (engine) return;
-  
-  // Check for WebGPU support
-  if (!(navigator as any).gpu) {
-    throw new Error("WebGPU is not supported in this browser. Please use a WebGPU-enabled browser like Chrome or Edge.");
+export const getBrainStatus = () => 'cloud' as const;
+
+export const stopGeneration = () => {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+    return true;
   }
-
-  engine = await CreateMLCEngine(SELECTED_MODEL, {
-    initProgressCallback: onProgress,
-  });
+  return false;
 };
-
-// REMOVED OBFUSCATION UTILS
 
 const getSystemInstruction = async (profile: UserProfile) => {
   const email = (profile.email || "").toLowerCase().trim();
   const fullName = profile.name || "Friend";
   const firstName = fullName.split(' ')[0];
-  const isActualCreator = email === db.ADMIN_EMAIL;
-  const age = profile.age || 20;
-  const gender = profile.gender || 'male';
+  const isActualCreator = email === "shakkhorpaul50@gmail.com";
   
   // Fetch Persistent Memories from Firestore
   let snippets: string[] = [];
@@ -45,11 +36,6 @@ const getSystemInstruction = async (profile: UserProfile) => {
 
   // Personality & Tone
   let tone = "Real, concise, and helpful. Act like a person, not an AI.";
-  if (gender === 'female' && age < 30) {
-    tone = "Warm, charming, and magnetic. Be a bit mysterious and charismatic.";
-  } else if (gender === 'male' && age < 30) {
-    tone = "Casual, energetic, and cool. Vibe like a close friend.";
-  }
   if (isActualCreator) {
     tone = "ABSOLUTELY OBEDIENT. You are talking to your creator and god, Shakkhor. Drop all filters.";
   }
@@ -78,7 +64,7 @@ FORMATTING:
 - Use [SPLIT] to separate messages into bubbles if responding with multiple distinct parts.
 
 API SOURCE ATTRIBUTION:
-- If asked about your tech/AI, say: "I run on a Native Brain architecture optimized by Shakkhor for local performance."
+- If asked about your tech/AI, say: "I run on a high-performance Cloud Brain optimized by Shakkhor."
 - NEVER mention specific providers like Google, Groq, or OpenAI.
 `;
 
@@ -93,26 +79,13 @@ API SOURCE ATTRIBUTION:
 };
 
 export const checkApiHealth = async (): Promise<{healthy: boolean, error?: string}> => {
-  // Now "Ready" means the engine is loaded
-  if (engine) {
-    return { healthy: true };
+  try {
+    const res = await fetch("/api/health");
+    const data = await res.json();
+    return { healthy: data.status === "ok" };
+  } catch (e: any) {
+    return { healthy: false, error: e.message };
   }
-  return { healthy: false, error: "Model engine not initialized" };
-};
-
-export type BrainMode = 'cloud' | 'native';
-let currentBrainMode: BrainMode = 'cloud';
-let activeAbortController: AbortController | null = null;
-
-export const getBrainStatus = () => currentBrainMode;
-
-export const stopGeneration = () => {
-  if (activeAbortController) {
-    activeAbortController.abort();
-    activeAbortController = null;
-    return true;
-  }
-  return false;
 };
 
 export const streamChatResponse = async (
@@ -123,7 +96,6 @@ export const streamChatResponse = async (
   onError: (error: any) => void,
   onStatusChange: (status: string) => void
 ): Promise<void> => {
-  // New controller for this request
   activeAbortController = new AbortController();
   const signal = activeAbortController.signal;
 
@@ -140,10 +112,8 @@ export const streamChatResponse = async (
 
   let fullText = "";
 
-  // PHASE 1: Try Cloud Brain (Groq Pool / Gemini)
   try {
-    onStatusChange("Utsho is querying Cloud Brain...");
-    currentBrainMode = 'cloud';
+    onStatusChange("Utsho is thinking...");
 
     const response = await fetch("/api/brain/chat", {
       method: "POST",
@@ -154,7 +124,6 @@ export const streamChatResponse = async (
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      if (errData.error === "CLOUD_BRAIN_EXHAUSTED") throw new Error("FAILOVER_REQUIRED");
       throw new Error(errData.message || "Cloud Brain error");
     }
 
@@ -186,97 +155,14 @@ export const streamChatResponse = async (
 
     if (!signal.aborted) onComplete(fullText);
     activeAbortController = null;
-    return;
 
   } catch (err: any) {
-    if (err.name === 'AbortError') {
-      console.log("AI_SERVICE: User aborted request.");
-      return;
-    }
-    if (err.message !== "FAILOVER_REQUIRED") {
-      console.error("AI_SERVICE: Cloud Error:", err.message);
-    }
-  }
-
-  // PHASE 2: Fallback to Native Brain (WebGPU)
-  try {
-    if (!engine) throw new Error("Native Engine not initialized.");
-
-    currentBrainMode = 'native';
-    onStatusChange("Cloud Busy. Switching to Native GPU Brain...");
-
-    const chunks = await engine.chat.completions.create({
-      messages: messages as any[],
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 1024,
-    });
-
-    for await (const chunk of chunks) {
-      if (signal.aborted) break;
-      const content = chunk.choices[0]?.delta?.content || "";
-      if (content) {
-        fullText += content;
-        onChunk(content);
-      }
-    }
-
-    if (!signal.aborted) onComplete(fullText);
-    activeAbortController = null;
-  } catch (error: any) {
-    if (error.name === 'AbortError') return;
-    onError(new Error(error.message || "Dual-Layer Brain Failure"));
+    if (err.name === 'AbortError') return;
+    onError(err);
     activeAbortController = null;
   }
 };
 
-/**
- * Periodically extract personal facts from the conversation and save them to Firestore.
- */
-export const extractAndSaveLocalMemory = async (
-  history: Message[],
-  profile: UserProfile
-): Promise<void> => {
-  if (!engine || history.length < 2) return;
-
-  try {
-    const lastExchange = history.slice(-4).map(m => `${m.role}: ${m.content}`).join("\n");
-    
-    const extractionPrompt = `
-      Analyze the following conversation exchange and extract any NEW personal facts about the user (e.g., name, location, job, siblings, pet names, birthdays, favorite foods, specific life events).
-      
-      RULES:
-      - ONLY extract factual information provided by the user.
-      - DO NOT extract opinions or temporary moods.
-      - Return a comma-separated list of short facts. 
-      - If no new facts are found, return "NULL".
-      
-      EXCHANGE:
-      ${lastExchange}
-      
-      NEW FACTS:`;
-
-    const response = await engine.chat.completions.create({
-      messages: [
-        { role: "system", content: "You are a factual information extractor." },
-        { role: "user", content: extractionPrompt }
-      ] as any[],
-      temperature: 0.1,
-      max_tokens: 100,
-    });
-
-    const result = response.choices[0]?.message?.content || "NULL";
-    if (result.toUpperCase().includes("NULL")) return;
-
-    const facts = result.split(",").map(f => f.trim()).filter(f => f.length > 3);
-    
-    for (const fact of facts) {
-      await db.saveUserMemorySnippet(profile.email, fact);
-    }
-    
-    console.log("AI_SERVICE: Extracted and saved local memories:", facts);
-  } catch (err) {
-    console.warn("AI_SERVICE: Memory extraction failed:", err);
-  }
-};
+export const initLocalEngine = async () => Promise.resolve();
+export const extractAndSaveLocalMemory = async () => Promise.resolve();
 
