@@ -22,13 +22,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiStatusText, setApiStatusText] = useState<string>('Initializing Engine...');
-  const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('error');
+  const [apiStatusText, setApiStatusText] = useState<string>('System Ready');
+  const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('perfect');
   const [currentBrainMode, setCurrentBrainMode] = useState<'cloud' | 'native'>('cloud');
   
-  // Local Brain State
-  const [modelProgress, setModelProgress] = useState<{ progress: number, text: string }>({ progress: 0, text: '' });
-  const [isBrainLoaded, setIsBrainLoaded] = useState(false);
+  // Removed Local Brain State
+  const [isBrainLoaded, setIsBrainLoaded] = useState(true);
   const [engineInitError, setEngineInitError] = useState<string | null>(null);
   
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 4>(1);
@@ -971,35 +970,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen font-['Hind_Siliguri',_sans-serif] overflow-hidden" style={{ backgroundColor: c.bgPrimary, color: c.textPrimary }}>
-      {/* Native Brain Loading Overlay */}
-      {!isBrainLoaded && !engineInitError && onboardingStep === 4 && (
-        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center p-8 backdrop-blur-2xl bg-black/60">
-          <div className="w-full max-w-sm space-y-6 text-center">
-            <div className="relative inline-block">
-              <div className="w-24 h-24 rounded-full border-4 border-emerald-500/20 animate-spin border-t-emerald-500" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles size={32} className="text-emerald-500" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Waking up Native Brain</h3>
-              <p className="text-xs text-white/50 font-medium">Downloading neural weights (~500MB) directly to your GPU. No data leaves this device.</p>
-            </div>
-            <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden border border-white/5">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${modelProgress.progress}%` }}
-                className="h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-              />
-            </div>
-            <div className="flex justify-between text-[10px] font-mono text-white/40 uppercase tracking-widest">
-              <span>Initializing GPU Nodes</span>
-              <span>{modelProgress.progress}%</span>
-            </div>
-            <p className="text-[10px] italic text-emerald-400 font-medium animate-pulse">{modelProgress.text}</p>
-          </div>
-        </div>
-      )}
 
       {/* WebGPU Error Fallback */}
       {engineInitError && (
