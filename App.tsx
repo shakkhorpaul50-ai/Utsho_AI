@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, initLocalEngine } from './services/aiService';
+import { streamChatResponse, checkApiHealth, initLocalEngine, extractAndSaveLocalMemory, getBrainStatus } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiStatusText, setApiStatusText] = useState<string>('Initializing Engine...');
   const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('error');
+  const [currentBrainMode, setCurrentBrainMode] = useState<'cloud' | 'native'>('cloud');
   
   // Local Brain State
   const [modelProgress, setModelProgress] = useState<{ progress: number, text: string }>({ progress: 0, text: '' });
@@ -740,6 +741,7 @@ const App: React.FC = () => {
       history,
       userProfile,
       (chunk) => {
+        setCurrentBrainMode(getBrainStatus());
         setSessions(prev => prev.map(s => {
           if (s.id !== activeSessionId) return s;
           const messages = [...s.messages];
@@ -779,6 +781,9 @@ const App: React.FC = () => {
         setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: updatedMessages } : s));
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, updatedMessages, newTitle).catch(console.error);
         setApiStatusText("Synced");
+
+        // Background: Extract and save potential life facts using the local engine 
+        extractAndSaveLocalMemory(updatedMessages, userProfile).catch(() => {});
       },
       (err) => {
         setIsLoading(false);
@@ -1299,10 +1304,16 @@ const App: React.FC = () => {
           <div className="p-4 flex flex-col gap-4">
             <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
             
-            <div className="border rounded-2xl p-3 flex items-center justify-center" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
+            <div className="border rounded-2xl p-3 space-y-2" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
                <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar, padding: '4px 12px' }}>
                  {connectionHealth === 'error' ? 'DISCONNECTED' : 'ONLINE'} {isLoading && "..."}
                </div>
+               {isBrainLoaded && (
+                 <div className="flex items-center justify-center gap-2 py-1 px-3 rounded-lg border text-[8px] font-black uppercase tracking-widest" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary, color: currentBrainMode === 'cloud' ? c.accent : '#10b981' }}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${currentBrainMode === 'cloud' ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
+                    BRAIN: {currentBrainMode === 'cloud' ? 'CLOUD POOL' : 'NATIVE GPU'}
+                 </div>
+               )}
             </div>
             
             <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>

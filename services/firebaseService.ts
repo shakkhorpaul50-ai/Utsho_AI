@@ -144,6 +144,29 @@ export const updateUserMemory = async (email: string, memoryUpdate: string) => {
   return newMemory;
 };
 
+export const saveUserMemorySnippet = async (email: string, text: string) => {
+  if (!db || !email) return;
+  const emailLower = email.toLowerCase();
+  const memoriesRef = collection(db, 'users', emailLower, 'memories');
+  const memoryId = `mem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const memoryRef = doc(memoriesRef, memoryId);
+  await setDoc(memoryRef, {
+    text,
+    createdAt: Timestamp.now()
+  });
+};
+
+export const getRecentUserMemories = async (email: string, limitCount: number = 10): Promise<string[]> => {
+  if (!db || !email) return [];
+  const emailLower = email.toLowerCase();
+  const memoriesRef = collection(db, 'users', emailLower, 'memories');
+  const q = query(memoriesRef, orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs
+    .slice(0, limitCount)
+    .map(d => d.data().text as string);
+};
+
 export const getUserProfile = async (email: string): Promise<UserProfile | null> => {
   if (!db) return null;
   const userRef = doc(db, 'users', email.toLowerCase());
