@@ -169,9 +169,9 @@ async function setupVite() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve('dist');
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req: express.Request, res: express.Response) => {
+    app.get('*all', (req: express.Request, res: express.Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

@@ -2,5 +2,5 @@
   "name": "Utsho-AI (Native Brain)",
   "description": "Utsho AI - A high-performance assistant with a 100% Native Brain running locally in the browser via WebGPU.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
