@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const [tempAge, setTempAge] = useState<string>('');
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
-  const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
+  const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('pool');
   const [customBaseUrlInput, setCustomBaseUrlInput] = useState('');
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
@@ -468,7 +468,7 @@ const App: React.FC = () => {
         const localProfile = JSON.parse(localProfileStr) as UserProfile;
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
-        setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
+        setCustomProviderInput(localProfile.customApiProvider || 'pool');
         setCustomBaseUrlInput(localProfile.customBaseUrl || '');
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
@@ -1191,7 +1191,7 @@ const App: React.FC = () => {
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI INFRASTRUCTURE</label>
                  <div className="grid grid-cols-3 gap-2">
                    {([
-                     { id: 'pool' as ApiProvider, label: 'Pool' },
+                     { id: 'pool' as ApiProvider, label: 'Shared Pool' },
                      { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
                      { id: 'gemini' as ApiProvider, label: 'Gemini' },
                      { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
@@ -1215,7 +1215,7 @@ const App: React.FC = () => {
                    ))}
                  </div>
                  <p className="text-[10px] mt-1.5 italic" style={{ color: c.textMuted }}>
-                   Tip: Use <span className="font-bold" style={{ color: c.accent }}>Private</span> for Ollama (Colab) or <span className="font-bold" style={{ color: c.accent }}>GitHub</span> for a permanent free setup.
+                   {customProviderInput === 'pool' ? "Uses shared community nodes. Highly stable, no key needed." : customProviderInput === 'github' ? "Fast & Free. Hosted by Microsoft Azure. Requires a GitHub PAT." : customProviderInput === 'selfhosted' ? "Local host or Colab. Requires a compatible OpenAI-style API." : "Direct connection to the provider official API endpoint."}
                  </p>
                  {customProviderInput === 'github' && (
                    <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: c.accent }}>
@@ -1224,7 +1224,7 @@ const App: React.FC = () => {
                  )}
               </div>
               <div className="space-y-2">
-                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
+                 <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (REQUIRED)</label>
                  <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
                  <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
               </div>

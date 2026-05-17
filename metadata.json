@@ -1,5 +1,5 @@
 {
   "name": "Utsho-AI",
-  "description": "A sleek, high-performance AI chatbot interface supporting multiple providers (ChatGPT, Gemini, DeepSeek, Grok), designed for seamless, intelligent conversations.",
+  "description": "A high-performance AI assistant with neural processing and community pool support.",
   "requestFramePermissions": []
 }
