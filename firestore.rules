@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. MASTER ADMIN OVERRIDE
+    // This gives shakkhorpaul50@gmail.com absolute power to read, write, and count everything.
+    match /{document=**} {
+      allow read, write: if request.auth != null && 
+                          request.auth.token.email.lower() == 'shakkhorpaul50@gmail.com';
+    }
+
+    // 2. USER DATA ACCESS
+    // Allows anyone to read/write to their own user document and sessions.
+    // This ensures users can save their chats without interference.
+    match /users/{userEmail}/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // 3. SYSTEM & API HEALTH
+    // Permissive access for API health logging to ensure node health is tracked.
+    match /system/{document=**} {
+      allow read, write: if true;
+    }
+
+    // 4. CONVERSATIONS (DMs)
+    match /conversations/{convId}/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, ApiProvider, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, getPoolStatus, adminResetPool, getLastNodeError, getActiveKey, getNeuralStatus } from './services/aiService';
+import { streamChatResponse, checkApiHealth, getActiveKey } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -24,16 +24,15 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiStatusText, setApiStatusText] = useState<string>('Ready');
   const [connectionHealth, setConnectionHealth] = useState<'perfect' | 'error'>('perfect');
-  const [poolInfo, setPoolInfo] = useState({ total: 0, active: 0, exhausted: 0 });
-  const [lastErrorDiagnostic, setLastErrorDiagnostic] = useState<string>("None");
-  const [neuralNodes, setNeuralNodes] = useState(getNeuralStatus());
   
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 4>(1);
   const [tempAge, setTempAge] = useState<string>('');
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
-  const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('pool');
+  const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
   const [customBaseUrlInput, setCustomBaseUrlInput] = useState('');
+  const [tunedModelIdInput, setTunedModelIdInput] = useState('tunedModels/my-utsho-model-id');
+  const [googleSearchEnabledInput, setGoogleSearchEnabledInput] = useState(true);
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -468,8 +467,10 @@ const App: React.FC = () => {
         const localProfile = JSON.parse(localProfileStr) as UserProfile;
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
-        setCustomProviderInput(localProfile.customApiProvider || 'pool');
+        setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
         setCustomBaseUrlInput(localProfile.customBaseUrl || '');
+        setTunedModelIdInput(localProfile.tunedModelId || 'tunedModels/my-utsho-model-id');
+        setGoogleSearchEnabledInput(localProfile.googleSearchEnabled ?? true);
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -484,6 +485,8 @@ const App: React.FC = () => {
               setUserProfile(cloudProfile);
               setCustomKeyInput(cloudProfile.customApiKey || '');
               setCustomBaseUrlInput(cloudProfile.customBaseUrl || '');
+              setTunedModelIdInput(cloudProfile.tunedModelId || 'tunedModels/my-utsho-model-id');
+              setGoogleSearchEnabledInput(cloudProfile.googleSearchEnabled ?? true);
               localStorage.setItem('utsho_profile', JSON.stringify(cloudProfile));
             }
             const cloudSessions = await db.getSessions(localProfile.email);
@@ -499,15 +502,6 @@ const App: React.FC = () => {
       }
     };
     bootApp();
-    const interval = setInterval(() => {
-      setPoolInfo(getPoolStatus());
-      setNeuralNodes(getNeuralStatus());
-      const err = getLastNodeError();
-      if (err !== "None") {
-        setLastErrorDiagnostic(err.length > 80 ? err.substring(0, 80) + "..." : err);
-      }
-    }, 4000);
-    return () => clearInterval(interval);
   }, []);
 
   // PWA install prompt
@@ -551,16 +545,9 @@ const App: React.FC = () => {
 
   const performHealthCheck = async (profile?: UserProfile) => {
     setApiStatusText('Verifying...');
-    const { healthy, error } = await checkApiHealth(profile || userProfile || undefined);
+    const { healthy } = await checkApiHealth(profile || userProfile || undefined);
     setConnectionHealth(healthy ? 'perfect' : 'error');
-    setApiStatusText(healthy ? 'Synced' : 'Node Issue');
-    setPoolInfo(getPoolStatus());
-    if (error && error !== "ping") setLastErrorDiagnostic(error.substring(0, 80));
-  };
-
-  const handleResetPool = () => {
-    adminResetPool();
-    performHealthCheck();
+    setApiStatusText(healthy ? 'Synced' : 'Service Issue');
   };
 
   const handleUpgrade = async () => {
@@ -595,7 +582,9 @@ const App: React.FC = () => {
       ...userProfile, 
       customApiKey: (customKeyInput || "").trim(), 
       customApiProvider: customProviderInput, 
-      customBaseUrl: (customBaseUrlInput || "").trim() 
+      customBaseUrl: (customBaseUrlInput || "").trim(),
+      tunedModelId: tunedModelIdInput.trim(),
+      googleSearchEnabled: googleSearchEnabledInput
     };
     setUserProfile(updated);
     localStorage.setItem('utsho_profile', JSON.stringify(updated));
@@ -779,7 +768,6 @@ const App: React.FC = () => {
         const updatedMessages = [...history, ...newMessages];
         setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: updatedMessages } : s));
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, updatedMessages, newTitle).catch(console.error);
-        setPoolInfo(getPoolStatus());
         setApiStatusText("Synced");
 
         // Background: self-training pipeline
@@ -798,12 +786,11 @@ const App: React.FC = () => {
       (err) => {
         setIsLoading(false);
         const errMsg = err.message || "Connection Error";
-        setLastErrorDiagnostic(errMsg);
         const errorMsg: Message = { id: crypto.randomUUID(), role: 'model', content: `Failure: ${errMsg}`, timestamp: new Date() };
         const finalMessages = [...history, errorMsg];
         setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s));
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, finalMessages, newTitle).catch(console.error);
-        setApiStatusText("Pool Error");
+        setApiStatusText("Service Issue");
       },
       (status) => setApiStatusText(status)
     );
@@ -933,41 +920,6 @@ const App: React.FC = () => {
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-
-  // --- Neural Status Component ---
-  const NeuralStatus: React.FC = () => (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: c.accent }}>Neural Ensemble Status</h3>
-        <div className="flex gap-1">
-          <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: c.accent }} />
-          <div className="w-1 h-1 rounded-full animate-pulse delay-75" style={{ backgroundColor: c.accent }} />
-          <div className="w-1 h-1 rounded-full animate-pulse delay-150" style={{ backgroundColor: c.accent }} />
-        </div>
-      </div>
-      <div className="space-y-3">
-        {neuralNodes.map((node) => (
-          <div key={node.name} className="space-y-1">
-            <div className="flex justify-between text-[9px] font-bold uppercase tracking-tighter">
-              <span style={{ color: c.textPrimary }}>{node.name}</span>
-              <span style={{ color: node.status === 'Shielded' ? '#3b82f6' : c.accent }}>{node.status}</span>
-            </div>
-            <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: c.bgTertiary }}>
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${node.activity}%` }}
-                className="h-full"
-                style={{ backgroundColor: node.status === 'Shielded' ? '#3b82f6' : c.accent }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="pt-2 border-t text-[8px] font-mono uppercase opacity-40" style={{ borderColor: c.borderPrimary }}>
-        LPU Inference Speed: 850 tokens/sec
       </div>
     </div>
   );
@@ -1191,7 +1143,6 @@ const App: React.FC = () => {
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI INFRASTRUCTURE</label>
                  <div className="grid grid-cols-3 gap-2">
                    {([
-                     { id: 'pool' as ApiProvider, label: 'Shared Pool' },
                      { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
                      { id: 'gemini' as ApiProvider, label: 'Gemini' },
                      { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
@@ -1209,13 +1160,13 @@ const App: React.FC = () => {
                          color: customProviderInput === p.id ? c.accent : c.textSecondary,
                        }}
                      >
-                       {customProviderInput === p.id && <Check size={10} className="inline mr-1" />}
+                       {customProviderInput === p.id && <Check size={12} className="inline mr-1" />}
                        {p.label}
                      </button>
                    ))}
                  </div>
                  <p className="text-[10px] mt-1.5 italic" style={{ color: c.textMuted }}>
-                   {customProviderInput === 'pool' ? "Uses shared community nodes. Highly stable, no key needed." : customProviderInput === 'github' ? "Fast & Free. Hosted by Microsoft Azure. Requires a GitHub PAT." : customProviderInput === 'selfhosted' ? "Local host or Colab. Requires a compatible OpenAI-style API." : "Direct connection to the provider official API endpoint."}
+                   Connect directly to the official provider. Requires your own key.
                  </p>
                  {customProviderInput === 'github' && (
                    <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer" className="text-[10px] underline block mt-1" style={{ color: c.accent }}>
@@ -1226,7 +1177,6 @@ const App: React.FC = () => {
               <div className="space-y-2">
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (REQUIRED)</label>
                  <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
-                 <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
               </div>
 
               {customProviderInput === 'selfhosted' && (
@@ -1236,6 +1186,43 @@ const App: React.FC = () => {
                    <p className="text-[10px] italic" style={{ color: c.textMuted }}>Paste the "YOUR NEW AI URL" from Colab here (add /v1 at the end).</p>
                 </div>
               )}
+
+              <div className="space-y-4 border-t pt-4" style={{ borderColor: c.borderPrimary }}>
+                 <label className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: c.accent }}>
+                   <Sparkles size={14} /> DUAL-ENGINE ARCHITECTURE
+                 </label>
+                 
+                 <div className="space-y-3">
+                   <div className="flex items-center justify-between p-3 rounded-2xl border" style={{ backgroundColor: c.bgTertiary, borderColor: c.borderPrimary }}>
+                     <div className="flex items-center gap-3">
+                       <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"><Globe size={18} /></div>
+                       <div>
+                         <div className="text-xs font-bold" style={{ color: c.textPrimary }}>Knowledge Grounding</div>
+                         <div className="text-[10px]" style={{ color: c.textMuted }}>Live Wikipedia & Web search</div>
+                       </div>
+                     </div>
+                     <button 
+                       onClick={() => setGoogleSearchEnabledInput(!googleSearchEnabledInput)}
+                       className="w-12 h-8 rounded-full transition-all relative p-1"
+                       style={{ backgroundColor: googleSearchEnabledInput ? c.accent : c.borderPrimary }}
+                     >
+                       <div className={`w-6 h-6 rounded-full bg-white transition-all shadow-sm ${googleSearchEnabledInput ? 'translate-x-4' : 'translate-x-0'}`} />
+                     </button>
+                   </div>
+
+                   <div className="space-y-1.5 pl-1">
+                     <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: c.textMuted }}>Brain (Custom Tuned Model ID)</label>
+                     <input 
+                       type="text" 
+                       value={tunedModelIdInput} 
+                       onChange={e => setTunedModelIdInput(e.target.value)} 
+                       placeholder="tunedModels/..." 
+                       className="w-full border p-3 rounded-xl outline-none text-xs font-mono" 
+                       style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} 
+                     />
+                   </div>
+                 </div>
+              </div>
               <div className="flex gap-3">
                  <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor = c.bgTertiary)} onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>Cancel</button>
                  <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
@@ -1379,45 +1366,12 @@ const App: React.FC = () => {
           <div className="p-4 flex flex-col gap-4">
             <button onClick={() => createNewSession()} className="py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95" style={{ backgroundColor: c.buttonPrimary, color: c.buttonPrimaryText }}><Plus size={18} /> New Chat</button>
             
-            {isAdmin && (
-              <div className="border rounded-2xl overflow-hidden" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-                <NeuralStatus />
-              </div>
-            )}
-
-            {isAdmin ? (
-            <div className="border rounded-[2rem] shadow-2xl space-y-4 p-4" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
-               <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: c.borderPrimary }}>
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>
-                     POOL HEALTH
-                  </div>
-                  <button onClick={handleResetPool} className="transition-colors" style={{ color: c.textMuted }}><RefreshCcw size={12} /></button>
-               </div>
-               
-               <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold" style={{ color: c.textMuted }}>AVAILABLE NODES</span>
-                    <span className="text-[10px] font-black text-emerald-400">{poolInfo.active}/{poolInfo.total}</span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: c.bgTertiary }}>
-                    <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${(poolInfo.active / Math.max(1, poolInfo.total)) * 100}%` }} />
-                  </div>
-               </div>
-
-               <div className="pt-2 border-t" style={{ borderColor: c.borderPrimary }}>
-                  <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar }}>
-                    {apiStatusText.toUpperCase()} {isLoading && "..."}
-                  </div>
-               </div>
-            </div>
-            ) : (
             <div className="border rounded-2xl p-3 flex items-center justify-center" style={{ backgroundColor: c.bgSecondary, borderColor: c.borderPrimary }}>
                <div className="text-[9px] font-black text-center py-1 rounded-lg truncate" style={{ color: connectionHealth === 'error' ? '#f87171' : c.statusBarText, backgroundColor: connectionHealth === 'error' ? 'rgba(248,113,113,0.05)' : c.statusBar, padding: '4px 12px' }}>
-                 {connectionHealth === 'error' ? 'RECONNECTING...' : 'ONLINE'} {isLoading && "..."}
+                 {connectionHealth === 'error' ? 'DISCONNECTED' : 'ONLINE'} {isLoading && "..."}
                </div>
             </div>
-            )}
-
+            
             <div className="flex items-center justify-between px-3 py-2 rounded-xl border" style={{ backgroundColor: c.bgHover, borderColor: c.borderPrimary }}>
               <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.textMuted }}>Tools</span>
               <button onClick={() => setIsToolsOpen(true)} className="transition-colors" style={{ color: c.textMuted }}><Wrench size={14} /></button>

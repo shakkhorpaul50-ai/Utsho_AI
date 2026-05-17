@@ -1,5 +1,6 @@
 {
   "name": "Utsho-AI",
-  "description": "A high-performance AI assistant with neural processing and community pool support.",
-  "requestFramePermissions": []
+  "description": "Utsho AI - A high-performance assistant with Dual-Engine (Brain + Knowledge) architecture and custom tuned model support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,7 +1,7 @@
 
 export type Role = 'user' | 'model';
 export type Gender = 'male' | 'female';
-export type ApiProvider = 'pool' | 'chatgpt' | 'gemini' | 'deepseek' | 'grok' | 'github' | 'selfhosted';
+export type ApiProvider = 'chatgpt' | 'gemini' | 'deepseek' | 'grok' | 'github' | 'selfhosted';
 
 export interface UserProfile {
   name: string;
@@ -15,6 +15,8 @@ export interface UserProfile {
   customBaseUrl?: string;
   emotionalMemory?: string; 
   preferredLanguage?: string;
+  tunedModelId?: string;
+  googleSearchEnabled?: boolean;
 }
 
 export type CanvasType = 'code' | 'math' | 'explain' | 'word' | 'graph';

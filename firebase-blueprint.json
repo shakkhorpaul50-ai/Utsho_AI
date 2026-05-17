@@ -1,0 +1,141 @@
+{
+  "collections": {
+    "users": {
+      "documents": {
+        "{email}": {
+          "fields": {
+            "name": { "type": "string" },
+            "email": { "type": "string" },
+            "gender": { "type": "string" },
+            "age": { "type": "number" },
+            "picture": { "type": "string" },
+            "googleId": { "type": "string" },
+            "customApiKey": { "type": "string" },
+            "customApiProvider": { "type": "string" },
+            "customBaseUrl": { "type": "string" },
+            "tunedModelId": { "type": "string" },
+            "googleSearchEnabled": { "type": "boolean" },
+            "emotionalMemory": { "type": "string" },
+            "preferredLanguage": { "type": "string" }
+          },
+          "collections": {
+            "sessions": {
+              "documents": {
+                "{sessionId}": {
+                  "fields": {
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "createdAt": { "type": "timestamp" },
+                    "messages": { "type": "array" }
+                  }
+                }
+              }
+            },
+            "private": {
+              "documents": {
+                "memory": {
+                  "fields": {
+                    "emotionalMemory": { "type": "string" }
+                  }
+                },
+                "learningContext": {
+                  "fields": {
+                    "lastSynced": { "type": "timestamp" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "system": {
+      "collections": {
+        "config": {
+          "documents": {
+            "directives": {
+              "collections": {
+                "entries": {
+                  "documents": {
+                    "{directiveId}": {
+                      "fields": {
+                        "type": { "type": "string" },
+                        "content": { "type": "string" },
+                        "createdAt": { "type": "timestamp" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "knowledge": {
+          "collections": {
+            "entries": {
+              "documents": {
+                "{entryId}": {
+                  "fields": {
+                    "topic": { "type": "string" },
+                    "content": { "type": "string" },
+                    "source": { "type": "string" },
+                    "createdAt": { "type": "timestamp" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "feedback": {
+          "collections": {
+            "messages": {
+              "documents": {
+                "{feedbackId}": {
+                  "fields": {
+                    "fromEmail": { "type": "string" },
+                    "fromName": { "type": "string" },
+                    "message": { "type": "string" },
+                    "createdAt": { "type": "timestamp" },
+                    "read": { "type": "boolean" },
+                    "reply": { "type": "string" },
+                    "repliedAt": { "type": "timestamp" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "conversations": {
+      "documents": {
+        "{convId}": {
+          "fields": {
+            "participants": { "type": "array" },
+            "lastMessage": { "type": "string" },
+            "lastMessageFrom": { "type": "string" },
+            "lastMessageAt": { "type": "timestamp" },
+            "updatedAt": { "type": "timestamp" }
+          },
+          "collections": {
+            "messages": {
+              "documents": {
+                "{messageId}": {
+                  "fields": {
+                    "id": { "type": "string" },
+                    "from": { "type": "string" },
+                    "fromName": { "type": "string" },
+                    "to": { "type": "string" },
+                    "message": { "type": "string" },
+                    "createdAt": { "type": "timestamp" },
+                    "read": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

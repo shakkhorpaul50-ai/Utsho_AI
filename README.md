@@ -38,9 +38,24 @@ service cloud.firestore {
 5. Click **Publish**. 
    *Wait ~1 minute for changes to take effect.*
 
-## 2. Environment Variables
-Ensure these are set in your Cloudflare dashboard:
-- `API_KEY`: Your AI service API key pool (comma separated).
+## 2. Dual-Engine Architecture (Brain + Knowledge)
+Utsho AI uses a custom "Dual-Engine" setup:
+- **Brain (Custom Tuned Model):** Uses your fine-tuned model ID (e.g., `tunedModels/your-model-id`) to retain unique tone and personality.
+- **Knowledge (Google Search Grounding):** Utilizes the `googleSearch` tool to pull live data from the web and Wikipedia.
+
+### Backend Proxy (server.ts or worker.js)
+To secure your API keys, all Gemini calls are proxied through the server.
+1. Set `GEMINI_API_KEY` in your environment.
+2. In **Settings**, you can toggle **Knowledge Grounding** and specify your **Tuned Model ID**.
+
+## 3. Deployment
+- **Local Dev:** `npm run dev` (Starts Express + Vite server)
+- **Production Build:** `npm run build`
+- **Cloudflare Worker:** Use the provided `worker.js` file if you want to deploy the proxy to Cloudflare Workers (Free Tier).
+
+## 4. Environment Variables
+Ensure these are set in your deployment environment:
+- `GEMINI_API_KEY`: Your Google AI Studio API key.
 - `FIREBASE_API_KEY`: Your Firebase Web SDK Key.
 - `FIREBASE_PROJECT_ID`: utsho-ai
 - `FIREBASE_AUTH_DOMAIN`: utsho-ai.firebaseapp.com

@@ -119,6 +119,10 @@ export const saveUserProfile = async (profile: UserProfile) => {
     picture: profile.picture,
     googleId: profile.googleId || '',
     customApiKey: profile.customApiKey || '',
+    customApiProvider: profile.customApiProvider || 'chatgpt',
+    customBaseUrl: profile.customBaseUrl || '',
+    tunedModelId: profile.tunedModelId || '',
+    googleSearchEnabled: profile.googleSearchEnabled ?? true,
     emotionalMemory: profile.emotionalMemory || '',
     preferredLanguage: profile.preferredLanguage || ''
   }, { merge: true });
