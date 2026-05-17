@@ -107,6 +107,11 @@ const PROVIDER_CONFIG: Record<ApiProvider, { baseURL: string; model: string; vis
     model: "gemini-2.0-flash",
     visionModel: "gemini-2.0-flash",
   },
+  github: {
+    baseURL: "https://models.inference.ai.azure.com",
+    model: "Llama-3.2-90B-Vision-Instruct",
+    visionModel: "Llama-3.2-90B-Vision-Instruct",
+  },
   deepseek: {
     baseURL: "https://api.deepseek.com",
     model: "deepseek-chat",
@@ -114,6 +119,11 @@ const PROVIDER_CONFIG: Record<ApiProvider, { baseURL: string; model: string; vis
   grok: {
     baseURL: "https://api.x.ai/v1",
     model: "grok-3",
+  },
+  selfhosted: {
+    baseURL: "http://localhost:11434/v1", // Default for Ollama
+    model: "llama3.2",
+    visionModel: "llama3.2-vision",
   },
 };
 
@@ -184,8 +194,12 @@ const createClient = (apiKey: string, profile?: UserProfile): { client: OpenAI; 
   
   if (isCustomKey && profile?.customApiProvider) {
     const config = PROVIDER_CONFIG[profile.customApiProvider];
+    const baseURL = (profile.customApiProvider === 'selfhosted' && profile.customBaseUrl) 
+      ? profile.customBaseUrl 
+      : config.baseURL;
+      
     return {
-      client: new OpenAI({ apiKey, baseURL: config.baseURL, dangerouslyAllowBrowser: true }),
+      client: new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true }),
       model: config.model,
       visionModel: config.visionModel || config.model,
     };

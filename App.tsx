@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [tempGender, setTempGender] = useState<Gender | null>(null);
   const [customKeyInput, setCustomKeyInput] = useState('');
   const [customProviderInput, setCustomProviderInput] = useState<ApiProvider>('chatgpt');
+  const [customBaseUrlInput, setCustomBaseUrlInput] = useState('');
   
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -468,6 +469,7 @@ const App: React.FC = () => {
         setUserProfile(localProfile);
         setCustomKeyInput(localProfile.customApiKey || '');
         setCustomProviderInput(localProfile.customApiProvider || 'chatgpt');
+        setCustomBaseUrlInput(localProfile.customBaseUrl || '');
         
         if (!localProfile.age || !localProfile.gender || localProfile.age === 0) {
           setOnboardingStep(2);
@@ -481,6 +483,7 @@ const App: React.FC = () => {
             if (cloudProfile) {
               setUserProfile(cloudProfile);
               setCustomKeyInput(cloudProfile.customApiKey || '');
+              setCustomBaseUrlInput(cloudProfile.customBaseUrl || '');
               localStorage.setItem('utsho_profile', JSON.stringify(cloudProfile));
             }
             const cloudSessions = await db.getSessions(localProfile.email);
@@ -588,7 +591,7 @@ const App: React.FC = () => {
 
   const saveSettings = async () => {
     if (!userProfile) return;
-    const updated = { ...userProfile, customApiKey: customKeyInput.trim(), customApiProvider: customProviderInput };
+    const updated = { ...userProfile, customApiKey: customKeyInput.trim(), customApiProvider: customProviderInput, customBaseUrl: customBaseUrlInput.trim() };
     setUserProfile(updated);
     localStorage.setItem('utsho_profile', JSON.stringify(updated));
     if (db.isDatabaseEnabled()) await db.saveUserProfile(updated);
@@ -1181,12 +1184,14 @@ const App: React.FC = () => {
 
               <div className="space-y-2">
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>AI PROVIDER (FOR CUSTOM KEY)</label>
-                 <div className="grid grid-cols-2 gap-2">
+                 <div className="grid grid-cols-3 gap-2">
                    {([
                      { id: 'chatgpt' as ApiProvider, label: 'ChatGPT' },
                      { id: 'gemini' as ApiProvider, label: 'Gemini' },
                      { id: 'deepseek' as ApiProvider, label: 'DeepSeek' },
                      { id: 'grok' as ApiProvider, label: 'Grok' },
+                     { id: 'github' as ApiProvider, label: 'GitHub' },
+                     { id: 'selfhosted' as ApiProvider, label: 'Private' },
                    ]).map(p => (
                      <button
                        key={p.id}
@@ -1203,12 +1208,23 @@ const App: React.FC = () => {
                      </button>
                    ))}
                  </div>
+                 <p className="text-[10px] mt-1.5 italic" style={{ color: c.textMuted }}>
+                   Tip: Use <span className="font-bold" style={{ color: c.accent }}>Private</span> for Llama 3.2 on your own virtual GPU (Ollama).
+                 </p>
               </div>
               <div className="space-y-2">
                  <label className="text-xs font-bold" style={{ color: c.textMuted }}>YOUR PERSONAL API KEY (OPTIONAL)</label>
                  <input type="password" value={customKeyInput} onChange={e => setCustomKeyInput(e.target.value)} placeholder="Paste your API key here..." className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
                  <p className="text-[10px] italic" style={{ color: c.textMuted }}>If left blank, Utsho will use the shared community pool.</p>
               </div>
+
+              {customProviderInput === 'selfhosted' && (
+                <div className="space-y-2">
+                   <label className="text-xs font-bold" style={{ color: c.textMuted }}>PRIVATE API BASE URL</label>
+                   <input type="text" value={customBaseUrlInput} onChange={e => setCustomBaseUrlInput(e.target.value)} placeholder="https://xxxx.trycloudflare.com/v1" className="w-full border p-4 rounded-xl outline-none text-sm" style={{ backgroundColor: c.bgInput, borderColor: c.borderPrimary, color: c.textPrimary }} />
+                   <p className="text-[10px] italic" style={{ color: c.textMuted }}>Paste the "YOUR NEW AI URL" from Colab here (add /v1 at the end).</p>
+                </div>
+              )}
               <div className="flex gap-3">
                  <button onClick={() => setIsSettingsOpen(false)} className="flex-1 py-3 font-bold border rounded-xl transition-colors" style={{ borderColor: c.borderPrimary, color: c.textSecondary, backgroundColor: 'transparent' }} onMouseEnter={e => (e.currentTarget.style.backgroundColor = c.bgTertiary)} onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>Cancel</button>
                  <button onClick={saveSettings} className="flex-1 py-3 font-bold rounded-xl transition-colors" style={{ backgroundColor: c.accent, color: '#fff', boxShadow: `0 4px 14px ${c.accentShadow}` }}>Save</button>
