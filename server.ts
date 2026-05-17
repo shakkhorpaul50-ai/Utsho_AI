@@ -50,7 +50,7 @@ async function streamGemini(messages: any[]): Promise<Response> {
 /**
  * Round-Robin Load Balancer with Retry Logic for GROQ
  */
-async function fetchGroqWithRetry(body: any): Promise<Response> {
+async function fetchGroqWithRetry(messages: any[]): Promise<Response> {
   if (GROQ_KEYS.length === 0) {
     throw new Error("No GROQ API keys configured.");
   }
@@ -69,9 +69,16 @@ async function fetchGroqWithRetry(body: any): Promise<Response> {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ ...body, stream: true })
+        body: JSON.stringify({ 
+          model: "llama-3.3-70b-versatile",
+          messages,
+          temperature: 0.7,
+          max_tokens: 2048,
+          stream: true 
+        })
       });
 
+      // If we hit a rate limit or server error, try next key immediately
       if (response.status === 429 || response.status >= 500) {
         lastError = new Error(`Groq Status ${response.status}`);
         continue;
@@ -91,11 +98,13 @@ app.post("/api/brain/chat", async (req: express.Request, res: express.Response) 
   try {
     const { messages } = req.body;
     
-    // Try Gemini First (Fastest in this environment)
+    // Attempt Gemini (extremely low latency)
     if (GEMINI_KEY) {
       try {
         const geminiResponse = await streamGemini(messages);
         res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("X-Brain-Source", "gemini-cloud");
+
         if (!geminiResponse.body) throw new Error("No Gemini body");
         
         const reader = geminiResponse.body.getReader();
@@ -120,19 +129,15 @@ app.post("/api/brain/chat", async (req: express.Request, res: express.Response) 
         res.end();
         return;
       } catch (geminiErr) {
-        console.warn("CLOUD_BRAIN: Gemini failed, trying Groq fallback...", geminiErr);
+        console.warn("CLOUD_BRAIN: Gemini fallback triggering...");
       }
     }
 
-    // Try Groq Second
-    const groqResponse = await fetchGroqWithRetry({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      temperature: 0.7,
-      max_tokens: 2048,
-    });
-
+    // Attempt Groq Pool
+    const groqResponse = await fetchGroqWithRetry(messages);
     res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("X-Brain-Source", "groq-pool");
+
     if (!groqResponse.body) throw new Error("No Groq body");
     const reader = groqResponse.body.getReader();
     while (true) {
@@ -143,11 +148,9 @@ app.post("/api/brain/chat", async (req: express.Request, res: express.Response) 
     res.end();
 
   } catch (err: any) {
-    console.error("SERVER_ERROR:", err.message);
     res.status(500).json({ 
       error: "CLOUD_BRAIN_EXHAUSTED", 
-      message: err.message,
-      suggestion: "FALLBACK_TO_NATIVE" 
+      message: err.message 
     });
   }
 });

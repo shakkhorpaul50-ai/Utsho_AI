@@ -102,8 +102,18 @@ export const checkApiHealth = async (): Promise<{healthy: boolean, error?: strin
 
 export type BrainMode = 'cloud' | 'native';
 let currentBrainMode: BrainMode = 'cloud';
+let activeAbortController: AbortController | null = null;
 
 export const getBrainStatus = () => currentBrainMode;
+
+export const stopGeneration = () => {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+    return true;
+  }
+  return false;
+};
 
 export const streamChatResponse = async (
   history: Message[],
@@ -113,6 +123,10 @@ export const streamChatResponse = async (
   onError: (error: any) => void,
   onStatusChange: (status: string) => void
 ): Promise<void> => {
+  // New controller for this request
+  activeAbortController = new AbortController();
+  const signal = activeAbortController.signal;
+
   const systemPrompt = await getSystemInstruction(profile);
   const formattedHistory = history.slice(-10).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'assistant',
@@ -124,7 +138,9 @@ export const streamChatResponse = async (
     ...formattedHistory
   ];
 
-  // PHASE 1: Try Cloud Brain (Groq Pool)
+  let fullText = "";
+
+  // PHASE 1: Try Cloud Brain (Groq Pool / Gemini)
   try {
     onStatusChange("Utsho is querying Cloud Brain...");
     currentBrainMode = 'cloud';
@@ -133,23 +149,22 @@ export const streamChatResponse = async (
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
+      signal
     });
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      if (errData.error === "CLOUD_BRAIN_EXHAUSTED") {
-        throw new Error("FAILOVER_REQUIRED");
-      }
-      throw new Error(errData.message || "Cloud Brain logic error");
+      if (errData.error === "CLOUD_BRAIN_EXHAUSTED") throw new Error("FAILOVER_REQUIRED");
+      throw new Error(errData.message || "Cloud Brain error");
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("No reader from cloud stream");
+    if (!reader) throw new Error("No reader");
     
     const decoder = new TextDecoder();
-    let fullText = "";
     
     while (true) {
+      if (signal.aborted) break;
       const { done, value } = await reader.read();
       if (done) break;
       
@@ -169,23 +184,26 @@ export const streamChatResponse = async (
       }
     }
 
-    onComplete(fullText);
+    if (!signal.aborted) onComplete(fullText);
+    activeAbortController = null;
     return;
 
   } catch (err: any) {
-    if (err.message === "FAILOVER_REQUIRED") {
-      console.warn("AI_SERVICE: Cloud exhausted. Falling back to Native...");
-    } else {
+    if (err.name === 'AbortError') {
+      console.log("AI_SERVICE: User aborted request.");
+      return;
+    }
+    if (err.message !== "FAILOVER_REQUIRED") {
       console.error("AI_SERVICE: Cloud Error:", err.message);
     }
   }
 
-  // PHASE 2: Fallback to Native Brain
+  // PHASE 2: Fallback to Native Brain (WebGPU)
   try {
-    if (!engine) throw new Error("Native Engine not initialized and Cloud Brain is down.");
+    if (!engine) throw new Error("Native Engine not initialized.");
 
     currentBrainMode = 'native';
-    onStatusChange("Cloud Busy. Switching to Native Brain...");
+    onStatusChange("Cloud Busy. Switching to Native GPU Brain...");
 
     const chunks = await engine.chat.completions.create({
       messages: messages as any[],
@@ -194,8 +212,8 @@ export const streamChatResponse = async (
       max_tokens: 1024,
     });
 
-    let fullText = "";
     for await (const chunk of chunks) {
+      if (signal.aborted) break;
       const content = chunk.choices[0]?.delta?.content || "";
       if (content) {
         fullText += content;
@@ -203,9 +221,12 @@ export const streamChatResponse = async (
       }
     }
 
-    onComplete(fullText);
+    if (!signal.aborted) onComplete(fullText);
+    activeAbortController = null;
   } catch (error: any) {
+    if (error.name === 'AbortError') return;
     onError(new Error(error.message || "Dual-Layer Brain Failure"));
+    activeAbortController = null;
   }
 };
 

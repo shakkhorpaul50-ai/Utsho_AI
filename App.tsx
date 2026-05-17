@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, MessageSquare, Trash2, Menu, Sparkles, LogOut, RefreshCcw, Settings, Globe, AlertCircle, Paperclip, X, Facebook, Instagram, Palette, Check, Code, Calculator, Copy, ChevronRight, Maximize2, Minimize2, FileText, Wrench, FileSearch, Image as ImageIcon, PenTool, LineChart, ZoomIn, ZoomOut, RotateCcw, Move, BookOpen, MessageCircle } from 'lucide-react';
 import { ChatSession, Message, UserProfile, Gender, CanvasBlock, CanvasType } from './types';
-import { streamChatResponse, checkApiHealth, initLocalEngine, extractAndSaveLocalMemory, getBrainStatus } from './services/aiService';
+import { streamChatResponse, checkApiHealth, initLocalEngine, extractAndSaveLocalMemory, getBrainStatus, stopGeneration } from './services/aiService';
 import { generateImage, getRemainingImageGenerations, getImageDailyLimit } from './services/imageService';
 import { analyzeConversation, selfAssessResponse, deepReflection, loadUserContextFromFirebase, extractAndSaveKnowledge } from './services/userLearningService';
 import { parseFile, detectFileType, getFileTypeLabel } from './services/fileParserService';
@@ -54,6 +54,13 @@ const App: React.FC = () => {
   const [dmNewEmail, setDmNewEmail] = useState('');
   const [dmError, setDmError] = useState('');
   const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  const handleStopGeneration = () => {
+    if (stopGeneration()) {
+      setIsLoading(false);
+      setApiStatusText("Stopped");
+    }
+  };
 
   // Canvas state (S-code / S-math / S-word / S-graph)
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -794,7 +801,10 @@ const App: React.FC = () => {
         if (db.isDatabaseEnabled()) db.updateSessionMessages(userProfile.email, activeSessionId, finalMessages, newTitle).catch(console.error);
         setApiStatusText("Service Issue");
       },
-      (status) => setApiStatusText(status)
+      (status) => {
+        setApiStatusText(status);
+        setCurrentBrainMode(getBrainStatus());
+      }
     );
   };
 
@@ -2082,8 +2092,22 @@ const App: React.FC = () => {
               <button onClick={() => setIsToolsOpen(true)} className="hidden md:block p-3.5 transition-colors" style={{ color: c.textMuted }} title="AI Tools"><Wrench size={22} /></button>
 
               <textarea rows={1} value={inputText} onChange={e => { setInputText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Talk to Utsho..." className="flex-1 bg-transparent py-2.5 md:py-3.5 px-2 outline-none resize-none max-h-40 text-[14px] md:text-[15px]" style={{ color: c.textPrimary }} />
-              <button onClick={handleSendMessage} disabled={isLoading} className="p-3 md:p-4 rounded-full transition-all active:scale-90 shadow-xl" style={{ backgroundColor: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? c.accent : c.bgTertiary, boxShadow: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? `0 4px 14px ${c.accentShadow}` : 'none', color: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? '#fff' : c.textMuted }}>
-                 {isLoading ? <RefreshCcw size={20} className="animate-spin" /> : <Send size={20} />}
+              <button 
+                onClick={isLoading ? handleStopGeneration : handleSendMessage} 
+                disabled={!isLoading && !inputText.trim() && !selectedImage && !selectedDocument} 
+                className="p-3 md:p-4 rounded-full transition-all active:scale-90 shadow-xl group" 
+                style={{ 
+                  backgroundColor: isLoading ? '#ef444422' : ((inputText.trim() || selectedImage || selectedDocument) ? c.accent : c.bgTertiary), 
+                  boxShadow: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? `0 4px 14px ${c.accentShadow}` : 'none', 
+                  color: (inputText.trim() || selectedImage || selectedDocument) && !isLoading ? '#fff' : (isLoading ? '#ef4444' : c.textMuted) 
+                }}
+              >
+                 {isLoading ? (
+                   <div className="relative flex items-center justify-center">
+                     <RefreshCcw size={20} className="animate-spin opacity-20" />
+                     <div className="absolute w-2.5 h-2.5 bg-red-500 rounded-sm animate-pulse scale-110" />
+                   </div>
+                 ) : <Send size={20} />}
               </button>
             </div>
             <p className="text-[10px] text-center font-bold uppercase tracking-widest" style={{ color: c.textMuted }}>UTSHO CAN MAKE MISTAKES. CHECK IMPORTANT INFO.</p>
